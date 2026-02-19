@@ -143,6 +143,17 @@ export const createBot = (): Bot => {
     const allowedChats = parseAllowedChatIds(process.env.ALLOWED_CHAT_IDS)
     const bot = new Bot(token)
 
+    // Register commands with Telegram so they appear in the menu
+    void bot.api.setMyCommands([
+        { command: 'new', description: 'Clear session and start fresh' },
+        { command: 'status', description: 'Check session status' },
+        { command: 'update', description: 'Update and restart the bot' },
+        { command: 'cron', description: 'Manage cron jobs' },
+        { command: 'run', description: 'Run a background agent job' },
+        { command: 'jobs', description: 'List running jobs' },
+        { command: 'kill', description: 'Kill a job by ID' }
+    ])
+
     // Global access control — all commands and messages are gated here
     bot.use(accessControlMiddleware(allowedChats))
 
