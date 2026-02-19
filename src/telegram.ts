@@ -199,6 +199,12 @@ export const createBot = (): Bot => {
     return bot
 }
 
+const startTypingLoop = (ctx: Context): NodeJS.Timeout => {
+    return setInterval(() => {
+        void ctx.replyWithChatAction('typing')
+    }, 4000)
+}
+
 const parseAllowedChatIds = (value: string | undefined): Set<string> => {
     if (!value) return new Set<string>()
     return new Set(
@@ -274,11 +280,6 @@ const safeEditMessage = async (bot: Bot, chatId: number, messageId: number, text
         throw error
     }
 }
-
-const startTypingLoop = (ctx: Context): NodeJS.Timeout =>
-    setInterval(() => {
-        void ctx.replyWithChatAction('typing')
-    }, 4000)
 
 const parseRunArgs = (input: string): { agent: AgentName; task: string; workdir: string } | null => {
     const trimmed = input.trim()
