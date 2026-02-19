@@ -45,25 +45,38 @@ npm install
 cp .env.example .env
 ```
 
-Required variables:
+3. Configure authentication (choose one):
+
+Option A - Claude.ai subscription (recommended for personal use):
+
+```bash
+claude login
+```
+
+That is it. The Claude Agent SDK uses the `claude` CLI binary, which picks up the OAuth session automatically.
+
+Option B - Anthropic API key:
+
+Set `ANTHROPIC_API_KEY` in your `.env` file.
+
+4. Ensure required env values are set:
 
 - `BOT_TOKEN`: Telegram bot token
-- `ANTHROPIC_API_KEY`: Anthropic API key
 - `ALLOWED_CHAT_IDS`: Comma-separated Telegram chat IDs allowed to use the bot
 
-3. Run in development:
+5. Run in development:
 
 ```bash
 npm run dev
 ```
 
-4. Build:
+6. Build:
 
 ```bash
 npm run build
 ```
 
-5. Run production build:
+7. Run production build:
 
 ```bash
 npm run start
