@@ -11,6 +11,7 @@ import { drainPendingFilesForChat } from './tools'
 import { ALLOWED_CHAT_IDS, BOT_TOKEN } from './utils'
 
 const inboxDir = path.join(os.homedir(), '.jellyfish', 'inbox')
+const imageExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff'])
 
 export const createBot = (): Bot => {
     const allowedChats = parseAllowedChatIds(ALLOWED_CHAT_IDS)
@@ -169,14 +170,7 @@ export const createBot = (): Bot => {
         try {
             const finalText = await runAgent(ctx.chat.id, ctx.message.text)
             await ctx.reply(finalText, { parse_mode: 'MarkdownV2' })
-            const pendingFiles = drainPendingFilesForChat(ctx.chat.id)
-            for (const pending of pendingFiles) {
-                try {
-                    await ctx.replyWithDocument(new InputFile(pending.filePath), pending.caption ? { caption: pending.caption } : undefined)
-                } catch (error) {
-                    console.error(`[telegram] failed to send queued file ${pending.filePath}:`, error)
-                }
-            }
+            await sendPendingFiles(ctx)
         } catch (error) {
             void drainPendingFilesForChat(ctx.chat.id)
             const visibleError = `Agent Error: ${error instanceof Error ? error.message : 'Unknown'}`
@@ -218,15 +212,7 @@ export const createBot = (): Bot => {
 
             const finalText = await runAgent(ctx.chat.id, prompt)
             await ctx.reply(finalText, { parse_mode: 'MarkdownV2' })
-
-            const pendingFiles = drainPendingFilesForChat(ctx.chat.id)
-            for (const pending of pendingFiles) {
-                try {
-                    await ctx.replyWithDocument(new InputFile(pending.filePath), pending.caption ? { caption: pending.caption } : undefined)
-                } catch (error) {
-                    console.error(`[telegram] failed to send queued file ${pending.filePath}:`, error)
-                }
-            }
+            await sendPendingFiles(ctx)
         } catch (error) {
             void drainPendingFilesForChat(ctx.chat.id)
             const visibleError = `Agent Error: ${error instanceof Error ? error.message : 'Unknown'}`
@@ -258,6 +244,28 @@ const setProcessingReaction = async (ctx: Context, active: boolean): Promise<voi
         await ctx.api.setMessageReaction(ctx.chat.id, ctx.message.message_id, active ? [{ type: 'emoji', emoji: '👀' }] : [])
     } catch (error) {
         console.warn('Could not update processing reaction:', error)
+    }
+}
+
+const sendPendingFiles = async (ctx: Context): Promise<void> => {
+    const chatId = ctx.chat?.id
+    if (!chatId) return
+    const pendingFiles = drainPendingFilesForChat(chatId)
+    for (const pending of pendingFiles) {
+        try {
+            const extension = path.extname(pending.filePath).toLowerCase()
+            const isImage = imageExtensions.has(extension)
+            const mode = pending.mode ?? 'auto'
+            const sendAsPhoto = mode === 'photo' || (mode === 'auto' && isImage)
+
+            if (sendAsPhoto) {
+                await ctx.replyWithPhoto(new InputFile(pending.filePath), pending.caption ? { caption: pending.caption } : undefined)
+            } else {
+                await ctx.replyWithDocument(new InputFile(pending.filePath), pending.caption ? { caption: pending.caption } : undefined)
+            }
+        } catch (error) {
+            console.error(`[telegram] failed to send queued file ${pending.filePath}:`, error)
+        }
     }
 }
 

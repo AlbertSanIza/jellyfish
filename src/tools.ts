@@ -10,6 +10,7 @@ const pendingFilesByChat = new Map<number, PendingTelegramFile[]>()
 export interface PendingTelegramFile {
     filePath: string
     caption?: string
+    mode?: 'auto' | 'photo' | 'document'
 }
 
 const memoryReadTool = tool(
@@ -47,18 +48,19 @@ export const drainPendingFilesForChat = (chatId: number): PendingTelegramFile[] 
 export const createJellyfishMcpServer = (chatId: number): McpSdkServerConfigWithInstance => {
     const telegramSendFileTool = tool(
         'telegram_send_file',
-        'Queue a local file so Jellyfish can send it to the Telegram user as a document. Use an absolute file path.',
+        'Queue a local file so Jellyfish can send it to the Telegram user. Images are sent as photos by default unless mode=document is set. Use an absolute file path.',
         {
             file_path: z.string().describe('Absolute path to the file on local filesystem'),
-            caption: z.string().optional().describe('Optional caption for the Telegram document')
+            caption: z.string().optional().describe('Optional caption for the Telegram media'),
+            mode: z.enum(['auto', 'photo', 'document']).optional().describe('Send mode override (default: auto)')
         },
-        async ({ file_path, caption }) => {
+        async ({ file_path, caption, mode }) => {
             if (!path.isAbsolute(file_path)) {
                 return { content: [{ type: 'text' as const, text: 'File path must be absolute' }] }
             }
 
             const existing = pendingFilesByChat.get(chatId) ?? []
-            existing.push({ filePath: file_path, caption })
+            existing.push({ filePath: file_path, caption, mode: mode ?? 'auto' })
             pendingFilesByChat.set(chatId, existing)
 
             return { content: [{ type: 'text' as const, text: `File queued for sending: ${file_path}` }] }
