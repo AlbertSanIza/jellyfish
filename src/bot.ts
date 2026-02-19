@@ -1,4 +1,4 @@
-import { Bot, Context } from 'grammy'
+import { Bot, Context, type NextFunction } from 'grammy'
 import { homedir } from 'node:os'
 import { runAgent } from './agent'
 import { addCron, loadCrons, removeCron } from './cron'
@@ -6,9 +6,7 @@ import { killJob, listJobs, loadJobs, spawnJob, type AgentName } from './jobs'
 import { clearSession, loadSession } from './session'
 
 const parseAllowedChatIds = (value: string | undefined): Set<string> => {
-    if (!value) {
-        return new Set<string>()
-    }
+    if (!value) return new Set<string>()
     return new Set(
         value
             .split(',')
@@ -17,41 +15,39 @@ const parseAllowedChatIds = (value: string | undefined): Set<string> => {
     )
 }
 
-const isAllowedChat = (chatId: string, allowlist: Set<string>): boolean => allowlist.has(chatId)
+const accessControlMiddleware = (allowedChats: Set<string>) => {
+    return async (ctx: Context, next: NextFunction): Promise<void> => {
+        const chatId = String(ctx.chat?.id ?? '')
+        if (!chatId) return
+        if (!allowedChats.has(chatId)) {
+            await ctx.reply('Access denied.')
+            return
+        }
+        await next()
+    }
+}
 
 const parseCronAddArgs = (input: string): { schedule: string; prompt: string } | null => {
     const trimmed = input.trim()
-    if (!trimmed) {
-        return null
-    }
+    if (!trimmed) return null
 
     if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
         const quote = trimmed[0]
-        if (!quote) {
-            return null
-        }
+        if (!quote) return null
         const closingIdx = trimmed.indexOf(quote, 1)
-        if (closingIdx <= 1) {
-            return null
-        }
+        if (closingIdx <= 1) return null
         const schedule = trimmed.slice(1, closingIdx).trim()
         const prompt = trimmed.slice(closingIdx + 1).trim()
-        if (!schedule || !prompt) {
-            return null
-        }
+        if (!schedule || !prompt) return null
         return { schedule, prompt }
     }
 
     const parts = trimmed.split(/\s+/)
     for (const cronFieldCount of [5, 6]) {
-        if (parts.length <= cronFieldCount) {
-            continue
-        }
+        if (parts.length <= cronFieldCount) continue
         const schedule = parts.slice(0, cronFieldCount).join(' ')
         const prompt = parts.slice(cronFieldCount).join(' ').trim()
-        if (!prompt) {
-            continue
-        }
+        if (!prompt) continue
         return { schedule, prompt }
     }
 
@@ -78,9 +74,7 @@ const safeEditMessage = async (bot: Bot, chatId: number, messageId: number, text
         await bot.api.editMessageText(chatId, messageId, text, html ? { parse_mode: 'HTML' } : undefined)
     } catch (error) {
         const err = error as { description?: string }
-        if (typeof err.description === 'string' && err.description.includes('message is not modified')) {
-            return
-        }
+        if (typeof err.description === 'string' && err.description.includes('message is not modified')) return
         throw error
     }
 }
@@ -92,17 +86,11 @@ const startTypingLoop = (ctx: Context): NodeJS.Timeout =>
 
 const parseRunArgs = (input: string): { agent: AgentName; task: string; workdir: string } | null => {
     const trimmed = input.trim()
-    if (!trimmed) {
-        return null
-    }
+    if (!trimmed) return null
 
     const [agentToken, ...restParts] = trimmed.split(/\s+/)
-    if (!agentToken) {
-        return null
-    }
-    if (agentToken !== 'codex' && agentToken !== 'opencode' && agentToken !== 'claude') {
-        return null
-    }
+    if (!agentToken) return null
+    if (agentToken !== 'codex' && agentToken !== 'opencode' && agentToken !== 'claude') return null
 
     const rest = restParts.join(' ').trim()
     const workdirRegex = /(?:^|\s)--workdir\s+("[^"]+"|'[^']+'|\S+)/g
@@ -115,15 +103,11 @@ const parseRunArgs = (input: string): { agent: AgentName; task: string; workdir:
         const full = last?.[0] ?? ''
         const captured = last?.[1] ?? ''
         const normalized = captured.replace(/^['"]|['"]$/g, '').trim()
-        if (normalized) {
-            workdir = normalized
-        }
+        if (normalized) workdir = normalized
         taskText = taskText.replace(full, ' ').replace(/\s+/g, ' ').trim()
     }
 
-    if (!taskText) {
-        return null
-    }
+    if (!taskText) return null
     return { agent: agentToken, task: taskText, workdir }
 }
 
@@ -131,89 +115,49 @@ const relativeTimeFormat = new Intl.RelativeTimeFormat('en', { numeric: 'auto' }
 
 const formatRelativeTime = (dateIso: string): string => {
     const timestamp = Date.parse(dateIso)
-    if (Number.isNaN(timestamp)) {
-        return dateIso
-    }
+    if (Number.isNaN(timestamp)) return dateIso
     const diffMs = timestamp - Date.now()
     const diffSeconds = Math.round(diffMs / 1000)
-
-    if (Math.abs(diffSeconds) < 60) {
-        return relativeTimeFormat.format(diffSeconds, 'second')
-    }
-
+    if (Math.abs(diffSeconds) < 60) return relativeTimeFormat.format(diffSeconds, 'second')
     const diffMinutes = Math.round(diffSeconds / 60)
-    if (Math.abs(diffMinutes) < 60) {
-        return relativeTimeFormat.format(diffMinutes, 'minute')
-    }
-
+    if (Math.abs(diffMinutes) < 60) return relativeTimeFormat.format(diffMinutes, 'minute')
     const diffHours = Math.round(diffMinutes / 60)
-    if (Math.abs(diffHours) < 24) {
-        return relativeTimeFormat.format(diffHours, 'hour')
-    }
-
-    const diffDays = Math.round(diffHours / 24)
-    return relativeTimeFormat.format(diffDays, 'day')
+    if (Math.abs(diffHours) < 24) return relativeTimeFormat.format(diffHours, 'hour')
+    return relativeTimeFormat.format(Math.round(diffHours / 24), 'day')
 }
 
 const runCommand = async (cmd: string[], cwd: string): Promise<string> => {
     const proc = Bun.spawn(cmd, { cwd, stdout: 'pipe', stderr: 'pipe' })
     const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
     const output = [stdout, stderr].filter(Boolean).join('\n').trim()
-    if (exitCode !== 0) {
-        throw new Error(output || `Command failed: ${cmd.join(' ')}`)
-    }
+    if (exitCode !== 0) throw new Error(output || `Command failed: ${cmd.join(' ')}`)
     return output
 }
 
 export const createBot = (): Bot => {
     const token = process.env.BOT_TOKEN
-    if (!token) {
-        throw new Error('Missing BOT_TOKEN')
-    }
+    if (!token) throw new Error('Missing BOT_TOKEN')
 
     const allowedChats = parseAllowedChatIds(process.env.ALLOWED_CHAT_IDS)
     const bot = new Bot(token)
 
-    bot.command('new', async (ctx) => {
-        const chatId = String(ctx.chat?.id ?? '')
-        if (!chatId) {
-            return
-        }
-        if (!isAllowedChat(chatId, allowedChats)) {
-            await ctx.reply('Access denied.')
-            return
-        }
+    // Global access control — all commands and messages are gated here
+    bot.use(accessControlMiddleware(allowedChats))
 
+    bot.command('new', async (ctx) => {
+        const chatId = String(ctx.chat!.id)
         await clearSession(chatId)
         await ctx.reply('Session cleared! Fresh start 🪼')
     })
 
     bot.command('status', async (ctx) => {
-        const chatId = String(ctx.chat?.id ?? '')
-        if (!chatId) {
-            return
-        }
-        if (!isAllowedChat(chatId, allowedChats)) {
-            await ctx.reply('Access denied.')
-            return
-        }
-
+        const chatId = String(ctx.chat!.id)
         const session = await loadSession(chatId)
         await ctx.reply(`Session has ${session.messages.length} messages.`)
     })
 
     bot.command('update', async (ctx) => {
-        const chatId = String(ctx.chat?.id ?? '')
-        if (!chatId) {
-            return
-        }
-        if (!isAllowedChat(chatId, allowedChats)) {
-            await ctx.reply('Access denied.')
-            return
-        }
-
         await ctx.reply('⬆️ Updating jellyfish...')
-
         try {
             const cwd = `${import.meta.dir}/..`
             await runCommand(['git', 'pull', 'origin', 'main'], cwd)
@@ -228,16 +172,9 @@ export const createBot = (): Bot => {
     })
 
     bot.command('cron', async (ctx) => {
-        const chatId = String(ctx.chat?.id ?? '')
-        if (!chatId) {
-            return
-        }
-        if (!isAllowedChat(chatId, allowedChats)) {
-            await ctx.reply('Access denied.')
-            return
-        }
-
+        const chatId = String(ctx.chat!.id)
         const args = ctx.match.trim()
+
         if (!args || args === 'help') {
             await ctx.reply(cronHelpText)
             return
@@ -250,7 +187,6 @@ export const createBot = (): Bot => {
                 await ctx.reply('No cron jobs set. Use /cron add <schedule> <prompt> to create one.')
                 return
             }
-
             const lines = ['🕐 Active cron jobs:', '']
             for (const [index, job] of chatJobs.entries()) {
                 lines.push(`${index + 1}. ID: ${job.id}`)
@@ -285,14 +221,12 @@ export const createBot = (): Bot => {
                 await ctx.reply('Invalid usage. Use /cron remove <id>.')
                 return
             }
-
             const allJobs = await loadCrons()
             const target = allJobs.find((job) => job.id === id && job.chatId === chatId)
             if (!target) {
                 await ctx.reply('❌ Not found.')
                 return
             }
-
             const removed = await removeCron(id)
             await ctx.reply(removed ? '✅ Removed.' : '❌ Not found.')
             return
@@ -302,15 +236,7 @@ export const createBot = (): Bot => {
     })
 
     bot.command('run', async (ctx) => {
-        const chatId = String(ctx.chat?.id ?? '')
-        if (!chatId) {
-            return
-        }
-        if (!isAllowedChat(chatId, allowedChats)) {
-            await ctx.reply('Access denied.')
-            return
-        }
-
+        const chatId = String(ctx.chat!.id)
         const parsed = parseRunArgs(ctx.match)
         if (!parsed) {
             await ctx.reply('Usage: /run <codex|opencode|claude> [--workdir /path] <task>')
@@ -320,58 +246,35 @@ export const createBot = (): Bot => {
         const job = await spawnJob(parsed.agent, parsed.task, parsed.workdir, chatId, async (completedJob) => {
             const shortId = completedJob.id.slice(0, 8)
             const output = completedJob.output.slice(-2000) || '(no output)'
-            const statusLabel = completedJob.status === 'done' ? 'Done' : 'Failed'
+            const statusLabel = completedJob.status === 'done' ? '✅ Done' : '❌ Failed'
             const text = `${statusLabel}: ${completedJob.agent} [${shortId}]\nTask: ${completedJob.task}\n\nOutput:\n${output}`
             await bot.api.sendMessage(Number(completedJob.chatId), text)
         })
 
         const shortId = job.id.slice(0, 8)
         await ctx.reply(
-            `Started ${job.agent} job [${shortId}]\nTask: ${job.task}\nWorkdir: ${job.workdir}\n\nI will notify you when it finishes. Use /jobs to check or /kill ${shortId} to stop.`
+            `🚀 Started ${job.agent} [${shortId}]\nTask: ${job.task}\nWorkdir: ${job.workdir}\n\nI'll notify you when it finishes. Use /jobs to check or /kill ${shortId} to stop.`
         )
     })
 
     bot.command('jobs', async (ctx) => {
-        const chatId = String(ctx.chat?.id ?? '')
-        if (!chatId) {
-            return
-        }
-        if (!isAllowedChat(chatId, allowedChats)) {
-            await ctx.reply('Access denied.')
-            return
-        }
-
+        const chatId = String(ctx.chat!.id)
         const jobs = await listJobs(chatId)
         if (jobs.length === 0) {
             await ctx.reply('No jobs yet. Use /run <codex|opencode|claude> <task>.')
             return
         }
 
-        const emojiByStatus = {
-            running: '⏳',
-            done: '✅',
-            failed: '❌',
-            killed: '🛑'
-        } as const
-
+        const emojiByStatus = { running: '⏳', done: '✅', failed: '❌', killed: '🛑' } as const
         const lines = jobs.map(
             (job) =>
                 `[${job.id.slice(0, 8)}] ${job.agent} — ${emojiByStatus[job.status]}\n   Task: ${job.task}\n   Started: ${formatRelativeTime(job.startedAt)}`
         )
-
         await ctx.reply(lines.join('\n\n'))
     })
 
     bot.command('kill', async (ctx) => {
-        const chatId = String(ctx.chat?.id ?? '')
-        if (!chatId) {
-            return
-        }
-        if (!isAllowedChat(chatId, allowedChats)) {
-            await ctx.reply('Access denied.')
-            return
-        }
-
+        const chatId = String(ctx.chat!.id)
         const idPrefix = ctx.match.trim()
         if (!idPrefix) {
             await ctx.reply('Usage: /kill <job-id-prefix>')
@@ -381,28 +284,18 @@ export const createBot = (): Bot => {
         const jobs = await loadJobs()
         const target = jobs.find((job) => job.chatId === chatId && job.id.startsWith(idPrefix))
         if (!target) {
-            await ctx.reply('Job not found.')
+            await ctx.reply('❌ Job not found.')
             return
         }
 
         const killed = await killJob(target.id)
-        if (!killed) {
-            await ctx.reply('Job not found.')
-            return
-        }
-
-        await ctx.reply(`Killed job [${killed.id.slice(0, 8)}].`)
+        await ctx.reply(killed ? `✅ Killed job [${killed.id.slice(0, 8)}].` : '❌ Job not found.')
     })
 
     bot.on('message:text', async (ctx) => {
         const chatIdNumber = ctx.chat.id
         const chatId = String(chatIdNumber)
         const text = ctx.message.text
-
-        if (!isAllowedChat(chatId, allowedChats)) {
-            await ctx.reply('Access denied.')
-            return
-        }
 
         const typingLoop = startTypingLoop(ctx)
         await ctx.replyWithChatAction('typing')
@@ -416,18 +309,9 @@ export const createBot = (): Bot => {
             draftMessageId = draft.message_id
 
             const finalText = await runAgent(chatId, text, async (partialText) => {
-                if (!draftMessageId) {
-                    return
-                }
-
+                if (!draftMessageId) return
                 const now = Date.now()
-                if (partialText === lastSentText) {
-                    return
-                }
-                if (now - lastUpdateMs < 700) {
-                    return
-                }
-
+                if (partialText === lastSentText || now - lastUpdateMs < 700) return
                 await safeEditMessage(bot, chatIdNumber, draftMessageId, partialText, true)
                 lastSentText = partialText
                 lastUpdateMs = now
