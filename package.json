@@ -1,5 +1,5 @@
 {
-    "name": "jellyfish-ai",
+    "name": "jellyfish",
     "version": "1.0.0",
     "private": true,
     "module": "src/index.ts",
@@ -9,11 +9,11 @@
         "prettier": "prettier --check .",
         "prettier:fix": "prettier --write .",
         "prepare": "husky",
-        "daemon:start": "pm2 start src/index.ts --interpreter bun --name jellyfish-ai",
-        "daemon:stop": "pm2 stop jellyfish-ai",
-        "daemon:restart": "pm2 restart jellyfish-ai",
-        "daemon:status": "pm2 status jellyfish-ai",
-        "daemon:logs": "pm2 logs jellyfish-ai",
+        "daemon:start": "pm2 start src/index.ts --interpreter bun --name jellyfish",
+        "daemon:stop": "pm2 stop jellyfish",
+        "daemon:restart": "pm2 restart jellyfish",
+        "daemon:status": "pm2 status jellyfish",
+        "daemon:logs": "pm2 logs jellyfish",
         "daemon:save": "pm2 save"
     },
     "dependencies": {

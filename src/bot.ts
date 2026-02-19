@@ -212,7 +212,7 @@ export const createBot = (): Bot => {
             return
         }
 
-        await ctx.reply('⬆️ Updating jellyfish-ai...')
+        await ctx.reply('⬆️ Updating jellyfish...')
 
         try {
             const cwd = `${import.meta.dir}/..`
@@ -220,7 +220,7 @@ export const createBot = (): Bot => {
             await runCommand(['bun', 'install', '--frozen-lockfile'], cwd)
             const { version } = (await import('../package.json')) as { version: string }
             await ctx.reply(`✅ Updated to v${version} — restarting...`)
-            await runCommand(['pm2', 'restart', 'jellyfish-ai'], cwd)
+            await runCommand(['pm2', 'restart', 'jellyfish'], cwd)
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
             await ctx.reply(`❌ Update failed: ${message}`)

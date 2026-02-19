@@ -1,4 +1,4 @@
-# jellyfish-ai
+# jellyfish
 
 Requires Bun 1.0+.
 
@@ -22,7 +22,7 @@ Personal Telegram AI bot built with `grammy` and the Claude Agent SDK.
 ## Project Structure
 
 ```text
-jellyfish-ai/
+jellyfish/
 ├── src/
 │   ├── index.ts
 │   ├── bot.ts
