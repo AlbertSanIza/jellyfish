@@ -70,8 +70,10 @@ const cronHelpText = [
 ].join('\n')
 
 const safeEditMessage = async (bot: Bot, chatId: number, messageId: number, text: string, html = false): Promise<void> => {
+    const trimmedText = text.trim()
+    if (!trimmedText) return
     try {
-        await bot.api.editMessageText(chatId, messageId, text, html ? { parse_mode: 'HTML' } : undefined)
+        await bot.api.editMessageText(chatId, messageId, trimmedText, html ? { parse_mode: 'HTML' } : undefined)
     } catch (error) {
         const err = error as { description?: string }
         if (typeof err.description === 'string' && err.description.includes('message is not modified')) return
