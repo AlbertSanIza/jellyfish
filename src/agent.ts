@@ -1,5 +1,5 @@
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
-import { lstat, mkdir, symlink } from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir, readlink, symlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import telegramifyMarkdown from 'telegramify-markdown'
@@ -90,6 +90,65 @@ const getErrorSummary = (error: unknown): string => {
     return message.replace(/\s+/g, ' ').trim().slice(0, 220)
 }
 
+const parseSkillNameFromMarkdown = (content: string): string | undefined => {
+    const trimmed = content.trimStart()
+    if (!trimmed.startsWith('---')) return undefined
+
+    const end = trimmed.indexOf('\n---', 3)
+    if (end === -1) return undefined
+    const frontmatter = trimmed.slice(3, end)
+    const match = frontmatter.match(/^\s*name\s*:\s*(.+)\s*$/m)
+    if (!match?.[1]) return undefined
+    return match[1].trim().replace(/^['"]|['"]$/g, '')
+}
+
+const logSkillDiagnostics = async (): Promise<void> => {
+    const projectSkillsDir = path.join(process.cwd(), 'skills')
+    const claudeSkillsDir = path.join(process.cwd(), '.claude', 'skills')
+
+    try {
+        const projectSkillsStat = await lstat(projectSkillsDir)
+        console.log(`[agent] skills dir: ${projectSkillsDir} (${projectSkillsStat.isDirectory() ? 'directory' : 'not-directory'})`)
+    } catch {
+        console.log(`[agent] skills dir missing: ${projectSkillsDir}`)
+        return
+    }
+
+    try {
+        const claudeSkillsStat = await lstat(claudeSkillsDir)
+        if (claudeSkillsStat.isSymbolicLink()) {
+            const target = await readlink(claudeSkillsDir)
+            console.log(`[agent] .claude/skills symlink -> ${target}`)
+        } else {
+            console.log('[agent] .claude/skills exists but is not a symlink')
+        }
+    } catch {
+        console.log('[agent] .claude/skills missing')
+    }
+
+    try {
+        const entries = await readdir(projectSkillsDir, { withFileTypes: true })
+        const skillDirs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+        if (skillDirs.length === 0) {
+            console.log('[agent] no skill folders found under project skills/')
+            return
+        }
+
+        for (const dir of skillDirs) {
+            const skillPath = path.join(projectSkillsDir, dir, 'SKILL.md')
+            try {
+                const content = await readFile(skillPath, 'utf8')
+                const parsedName = parseSkillNameFromMarkdown(content) ?? '(no frontmatter name)'
+                console.log(`[agent] detected skill folder="${dir}" name="${parsedName}" file=${skillPath}`)
+            } catch {
+                console.warn(`[agent] skill folder missing SKILL.md: ${path.join(projectSkillsDir, dir)}`)
+            }
+        }
+    } catch (error) {
+        console.warn('[agent] failed to enumerate project skills:', error)
+    }
+}
+
 const ensureProjectSkillsBridge = async (): Promise<void> => {
     const projectSkillsDir = path.join(process.cwd(), 'skills')
     const claudeProjectDir = path.join(process.cwd(), '.claude')
@@ -131,6 +190,7 @@ const prepareClaudeRuntimeEnv = async (): Promise<void> => {
     }
 
     await ensureProjectSkillsBridge()
+    await logSkillDiagnostics()
 }
 
 const executeQueryAttempt = async (
