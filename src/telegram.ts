@@ -6,6 +6,7 @@ import path from 'node:path'
 import { runAgent } from './agent'
 import { addCron, loadCrons, removeCron } from './cron'
 import { killJob, listJobs, loadJobs, spawnJob, type AgentName } from './jobs'
+import { createCanUseTool, handlePermissionCallback } from './permissions'
 import { clearSession, loadSession } from './session'
 import { drainPendingFilesForChat } from './tools'
 import { ALLOWED_CHAT_IDS, BOT_TOKEN } from './utils'
@@ -164,12 +165,20 @@ export const createBot = (): Bot => {
         await ctx.reply(killed ? `✅ Killed job [${killed.id.slice(0, 8)}].` : '❌ Job not found.')
     })
 
+    bot.on('callback_query:data', async (ctx) => {
+        const handled = await handlePermissionCallback(bot.api, ctx.callbackQuery)
+        if (!handled) {
+            await ctx.answerCallbackQuery({ text: 'Unknown action' })
+        }
+    })
+
     bot.on('message:text', async (ctx) => {
         const typingLoop = startTypingLoop(ctx)
         await setProcessingReaction(ctx, true)
         try {
-            const finalText = await runAgent(ctx.chat.id, ctx.message.text)
-            await ctx.reply(finalText, { parse_mode: 'MarkdownV2' })
+            const canUseTool = createCanUseTool(bot.api, ctx.chat.id)
+            const finalText = await runAgent(ctx.chat.id, ctx.message.text, undefined, canUseTool)
+            await sendFormattedReply(ctx, finalText)
             await sendPendingFiles(ctx)
         } catch (error) {
             void drainPendingFilesForChat(ctx.chat.id)
@@ -210,8 +219,9 @@ export const createBot = (): Bot => {
             const caption = ctx.message.caption?.trim()
             const prompt = `[Image: ${imagePath}]\n${caption && caption.length > 0 ? caption : 'The user sent you this image.'}`
 
-            const finalText = await runAgent(ctx.chat.id, prompt)
-            await ctx.reply(finalText, { parse_mode: 'MarkdownV2' })
+            const canUseTool = createCanUseTool(bot.api, ctx.chat.id)
+            const finalText = await runAgent(ctx.chat.id, prompt, undefined, canUseTool)
+            await sendFormattedReply(ctx, finalText)
             await sendPendingFiles(ctx)
         } catch (error) {
             void drainPendingFilesForChat(ctx.chat.id)
@@ -227,6 +237,23 @@ export const createBot = (): Bot => {
     bot.catch((error) => console.error('Telegram Bot Error:', error))
 
     return bot
+}
+
+const escapeMarkdownV2 = (text: string): string => text.replace(/([_*[\]()~`>#+=|{}.!-])/g, '\\$1')
+
+const sendFormattedReply = async (ctx: Context, text: string): Promise<void> => {
+    try {
+        await ctx.reply(text, { parse_mode: 'MarkdownV2' })
+    } catch {
+        // telegramifyMarkdown missed some chars — strip its escaping, re-escape everything, retry as MarkdownV2
+        const plain = text.replace(/\\([_*[\]()~`>#+=|{}.!-])/g, '$1')
+        try {
+            await ctx.reply(escapeMarkdownV2(plain), { parse_mode: 'MarkdownV2' })
+        } catch {
+            // Last resort — send without any parse mode
+            await ctx.reply(plain)
+        }
+    }
 }
 
 const startTypingLoop = (ctx: Context): NodeJS.Timeout => {

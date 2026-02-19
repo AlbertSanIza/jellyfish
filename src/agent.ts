@@ -1,4 +1,4 @@
-import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import { query, type CanUseTool, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { lstat, mkdir, readFile, readdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -10,6 +10,9 @@ import { createJellyfishMcpServer } from './tools'
 type OnChunk = (partialText: string) => Promise<void> | void
 
 const BUILTIN_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch']
+// Tools auto-approved by the SDK (safe, read-only). Dangerous tools (Bash, Write, Edit)
+// are still available but go through the canUseTool callback for Telegram approval.
+const AUTO_ALLOWED_TOOLS = ['Read', 'Glob', 'Grep', 'WebFetch']
 const SKILL_TOOL = 'Skill'
 
 const nowIso = (): string => new Date().toISOString()
@@ -90,6 +93,7 @@ interface QueryAttemptOptions {
     includeBuiltinTools: boolean
     bypassPermissions: boolean
     model?: string
+    canUseTool?: CanUseTool
 }
 
 interface QueryExecutionResult {
@@ -205,7 +209,10 @@ const executeQueryAttempt = async (
     let capturedSessionId = options.resumeSessionId
     let accumulatedText = ''
     let finalResult: string | undefined
-    const allowedTools = options.includeBuiltinTools ? [SKILL_TOOL, ...BUILTIN_TOOLS] : [SKILL_TOOL]
+    const mcpTools = options.includeMemoryMcp
+        ? ['mcp__jellyfish-memory__memory_read', 'mcp__jellyfish-memory__memory_write', 'mcp__jellyfish-memory__telegram_send_file']
+        : []
+    const allowedTools = [...(options.includeBuiltinTools ? [SKILL_TOOL, ...AUTO_ALLOWED_TOOLS] : [SKILL_TOOL]), ...mcpTools]
 
     const lowerMessage = messageText.toLowerCase()
     const relevantSkills = availableSkills.filter((skill) => lowerMessage.includes(skill.name.toLowerCase()))
@@ -220,7 +227,9 @@ const executeQueryAttempt = async (
             systemPrompt: buildSystemPrompt(availableSkills),
             tools: options.includeBuiltinTools ? BUILTIN_TOOLS : [],
             allowedTools,
-            ...(options.bypassPermissions ? { permissionMode: 'bypassPermissions' as const, allowDangerouslySkipPermissions: true } : {}),
+            ...(options.bypassPermissions
+                ? { permissionMode: 'bypassPermissions' as const, allowDangerouslySkipPermissions: true }
+                : { permissionMode: 'default' as const, ...(options.canUseTool ? { canUseTool: options.canUseTool } : {}) }),
             includePartialMessages: options.includePartialMessages,
             cwd: process.cwd(),
             additionalDirectories: [os.homedir()],
@@ -276,7 +285,7 @@ const executeQueryAttempt = async (
     return { sessionId: capturedSessionId, accumulatedText, finalResult }
 }
 
-export const runAgent = async (chatId: number, messageText: string, onChunk?: OnChunk): Promise<string> => {
+export const runAgent = async (chatId: number, messageText: string, onChunk?: OnChunk, canUseTool?: CanUseTool): Promise<string> => {
     console.log(`[agent] chatId: ${chatId} | message: "${messageText.slice(0, 80)}"`)
     await prepareClaudeRuntimeEnv()
 
@@ -297,7 +306,8 @@ export const runAgent = async (chatId: number, messageText: string, onChunk?: On
                 includePartialMessages: true,
                 includeMemoryMcp: true,
                 includeBuiltinTools: true,
-                bypassPermissions: true,
+                bypassPermissions: false,
+                canUseTool,
                 model: configuredModel
             },
             {
@@ -305,7 +315,8 @@ export const runAgent = async (chatId: number, messageText: string, onChunk?: On
                 includePartialMessages: true,
                 includeMemoryMcp: true,
                 includeBuiltinTools: true,
-                bypassPermissions: true,
+                bypassPermissions: false,
+                canUseTool,
                 model: configuredModel
             },
             {
@@ -313,21 +324,24 @@ export const runAgent = async (chatId: number, messageText: string, onChunk?: On
                 includePartialMessages: true,
                 includeMemoryMcp: true,
                 includeBuiltinTools: true,
-                bypassPermissions: true
+                bypassPermissions: false,
+                canUseTool
             },
             {
                 label: 'fresh/no-mcp-no-partials',
                 includePartialMessages: false,
                 includeMemoryMcp: false,
                 includeBuiltinTools: true,
-                bypassPermissions: true
+                bypassPermissions: false,
+                canUseTool
             },
             {
                 label: 'fresh/minimal',
                 includePartialMessages: false,
                 includeMemoryMcp: false,
                 includeBuiltinTools: false,
-                bypassPermissions: true
+                bypassPermissions: false,
+                canUseTool
             },
             {
                 label: 'fresh/minimal/default-permissions',
