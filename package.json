@@ -10,7 +10,7 @@
         "dev": "bun --watch index.ts",
         "prettier": "prettier --check .",
         "prettier:fix": "prettier --write .",
-        "daemon:start": "pm2 start src/index.ts --interpreter bun --name jellyfish",
+        "daemon:start": "pm2 start index.ts --interpreter bun --name jellyfish",
         "daemon:stop": "pm2 stop jellyfish",
         "daemon:restart": "pm2 restart jellyfish",
         "daemon:status": "pm2 status jellyfish",
