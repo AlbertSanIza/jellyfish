@@ -167,9 +167,13 @@ export const createBot = (): Bot => {
             const draft = await ctx.reply('Thinking...')
             draftMessageId = draft.message_id
             const finalText = await runAgent(ctx.chat.id, ctx.message.text, async (partialText) => {
-                if (!draftMessageId) return
+                if (!draftMessageId) {
+                    return
+                }
                 const now = Date.now()
-                if (partialText === lastSentText || now - lastUpdateMs < 700) return
+                if (partialText === lastSentText || now - lastUpdateMs < 700) {
+                    return
+                }
                 await safeEditMessage(bot, ctx.chat.id, draftMessageId, partialText, true)
                 lastSentText = partialText
                 lastUpdateMs = now
