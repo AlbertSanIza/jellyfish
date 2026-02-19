@@ -14,6 +14,7 @@ startCronScheduler(async (job) => {
 }).catch(console.error)
 
 bot.start()
+console.log('Jellyfish Bot Started!')
 
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     console.log(`Received ${signal}. Stopping bot...`)
