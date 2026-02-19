@@ -1,5 +1,5 @@
-import { createBot } from './bot'
 import { runAgent } from './agent'
+import { createBot } from './bot'
 import { startCronScheduler } from './cron'
 
 const bot = createBot()
