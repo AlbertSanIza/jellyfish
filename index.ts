@@ -1,3 +1,6 @@
+import chalk from 'chalk'
+import figlet from 'figlet'
+
 import { runAgent } from './src/agent'
 import { startCronScheduler } from './src/cron'
 import { createBot } from './src/telegram'
@@ -14,7 +17,24 @@ startCronScheduler(async (job) => {
 }).catch(console.error)
 
 bot.start()
-console.log('Jellyfish Bot Started!')
+
+const JELLYFISH_ART = `
+                 .-;':':'-.
+                {'.'.'.'.'.}
+                 )        \`.
+                '-. ._ ,_.-='
+                  \`). ( \`);(
+                  ('. .)(,'.)
+                   ) ( ,').(
+                  ( .').'(').
+                  .) (' ).(')
+                   '  ) (  ).
+                    .'( .)'
+                      .).'
+`
+
+console.log(chalk.blue(figlet.textSync('JELLYFISH', { font: 'Small' })))
+console.log(chalk.cyan(JELLYFISH_ART))
 
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     console.log(`Received ${signal}. Stopping bot...`)
