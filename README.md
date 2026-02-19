@@ -10,14 +10,14 @@ Personal Telegram AI bot built with `grammy` and the Claude Agent SDK.
 - Claude Agent SDK integration with streaming replies
 - Session memory per chat saved to `~/.jellyfish/sessions/<chatId>.json`
 - Custom memory tools:
-  - `memory_read` from `~/.jellyfish/memory/<name>.md`
-  - `memory_write` to `~/.jellyfish/memory/<name>.md`
+    - `memory_read` from `~/.jellyfish/memory/<name>.md`
+    - `memory_write` to `~/.jellyfish/memory/<name>.md`
 - Commands:
-  - `/new` clears chat session
-  - `/status` shows stored message count
-  - `/cron list` lists cron jobs for the current chat
-  - `/cron add <schedule> <prompt>` adds a cron job
-  - `/cron remove <id>` removes a cron job
+    - `/new` clears chat session
+    - `/status` shows stored message count
+    - `/cron list` lists cron jobs for the current chat
+    - `/cron add <schedule> <prompt>` adds a cron job
+    - `/cron remove <id>` removes a cron job
 
 ## Project Structure
 
@@ -93,11 +93,12 @@ bun run daemon:start
 ```
 
 Other commands:
-- `bun run daemon:stop`     - stop the daemon
-- `bun run daemon:restart`  - restart after code changes
-- `bun run daemon:status`   - check if running
-- `bun run daemon:logs`     - tail logs
-- `bun run daemon:save`     - persist across reboots (run once after start)
+
+- `bun run daemon:stop` - stop the daemon
+- `bun run daemon:restart` - restart after code changes
+- `bun run daemon:status` - check if running
+- `bun run daemon:logs` - tail logs
+- `bun run daemon:save` - persist across reboots (run once after start)
 
 To auto-start on login (macOS):
 
