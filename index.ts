@@ -1,6 +1,6 @@
 import { runAgent } from './src/agent'
-import { createBot } from './src/bot'
 import { startCronScheduler } from './src/cron'
+import { createBot } from './src/telegram'
 
 const bot = createBot()
 
