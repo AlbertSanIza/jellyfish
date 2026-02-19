@@ -18,23 +18,13 @@ startCronScheduler(async (job) => {
 
 bot.start()
 
-const JELLYFISH_ART = `
-                 .-;':':'-.
-                {'.'.'.'.'.}
-                 )        \`.
-                '-. ._ ,_.-='
-                  \`). ( \`);(
-                  ('. .)(,'.)
-                   ) ( ,').(
-                  ( .').'(').
-                  .) (' ).(')
-                   '  ) (  ).
-                    .'( .)'
-                      .).'
-`
-
-console.log(chalk.blue(figlet.textSync('JELLYFISH', { font: 'Small' })))
-console.log(chalk.cyan(JELLYFISH_ART))
+const title = chalk.blue(figlet.textSync('JELLYFISH', { font: 'Small' }))
+const titleLines = title.split('\n')
+const titleWidth = Math.max(...titleLines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, '').length))
+const welcomeText = 'Welcome to'
+const padding = Math.floor((titleWidth - welcomeText.length) / 2)
+console.log(' '.repeat(padding) + chalk.white(welcomeText))
+console.log(title)
 
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     console.log(`Received ${signal}. Stopping bot...`)
