@@ -1,79 +1,38 @@
-import { promises as fs } from 'node:fs'
-import path from 'node:path'
+import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk'
+import { mkdir } from 'node:fs/promises'
 import os from 'node:os'
+import path from 'node:path'
+import { z } from 'zod'
 
-const baseDir = path.join(os.homedir(), '.jellyfish')
-const memoryDir = path.join(baseDir, 'memory')
+const memoryDir = path.join(os.homedir(), '.jellyfish', 'memory')
 
-const sanitizeName = (name: string): string =>
-    name
-        .trim()
-        .replace(/[^a-zA-Z0-9._-]/g, '_')
-        .replace(/^_+|_+$/g, '') || 'default'
-
-const getMemoryPath = (name: string): string => path.join(memoryDir, `${sanitizeName(name)}.md`)
-
-const ensureMemoryDir = async (): Promise<void> => {
-    await fs.mkdir(memoryDir, { recursive: true })
-}
-
-const memoryRead = async (input: { name: string }): Promise<string> => {
-    await ensureMemoryDir()
-    const memoryPath = getMemoryPath(input.name)
-
-    try {
-        return await fs.readFile(memoryPath, 'utf8')
-    } catch (error) {
-        const err = error as NodeJS.ErrnoException
-        if (err.code === 'ENOENT') {
-            return 'not found'
+const memoryReadTool = tool(
+    'memory_read',
+    'Reads a named memory file from ~/.jellyfish/memory/<name>.md',
+    { name: z.string().describe('Memory file name (without .md extension)') },
+    async ({ name }) => {
+        await mkdir(memoryDir, { recursive: true })
+        try {
+            const content = await Bun.file(path.join(memoryDir, `${name}.md`)).text()
+            return { content: [{ type: 'text' as const, text: content }] }
+        } catch {
+            return { content: [{ type: 'text' as const, text: 'not found' }] }
         }
-        throw error
     }
-}
+)
 
-const memoryWrite = async (input: { name: string; content: string }): Promise<string> => {
-    await ensureMemoryDir()
-    const memoryPath = getMemoryPath(input.name)
-    await fs.writeFile(memoryPath, input.content, 'utf8')
-    return 'saved'
-}
-
-export const customMemoryTools = [
-    {
-        name: 'memory_read',
-        description: 'Read a saved markdown memory by name.',
-        input_schema: {
-            type: 'object',
-            properties: {
-                name: {
-                    type: 'string',
-                    description: 'Memory note name without extension.'
-                }
-            },
-            required: ['name'],
-            additionalProperties: false
-        },
-        run: memoryRead
-    },
-    {
-        name: 'memory_write',
-        description: 'Write a markdown memory by name.',
-        input_schema: {
-            type: 'object',
-            properties: {
-                name: {
-                    type: 'string',
-                    description: 'Memory note name without extension.'
-                },
-                content: {
-                    type: 'string',
-                    description: 'Markdown content to save.'
-                }
-            },
-            required: ['name', 'content'],
-            additionalProperties: false
-        },
-        run: memoryWrite
+const memoryWriteTool = tool(
+    'memory_write',
+    'Writes content to a named memory file at ~/.jellyfish/memory/<name>.md',
+    { name: z.string().describe('Memory file name (without .md extension)'), content: z.string().describe('Content to write') },
+    async ({ name, content }) => {
+        await mkdir(memoryDir, { recursive: true })
+        await Bun.write(path.join(memoryDir, `${name}.md`), content)
+        return { content: [{ type: 'text' as const, text: 'saved' }] }
     }
-] as const
+)
+
+export const memoryMcpServer: McpSdkServerConfigWithInstance = createSdkMcpServer({
+    name: 'jellyfish-memory',
+    tools: [memoryReadTool, memoryWriteTool]
+})

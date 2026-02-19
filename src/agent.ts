@@ -1,15 +1,16 @@
-import { query } from '@anthropic-ai/claude-agent-sdk'
+import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import os from 'node:os'
 import { markdownToHtml } from './format'
-import { customMemoryTools } from './tools'
+import { memoryMcpServer } from './tools'
 import { loadSession, saveSession, type SessionData, type SessionMessage } from './session'
 
 type OnChunk = (partialText: string) => Promise<void> | void
 
-const BUILTIN_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'] as const
+const BUILTIN_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch']
 
 const nowIso = (): string => new Date().toISOString()
 
-const systemPrompt = (): string => {
+const buildSystemPrompt = (): string => {
     const now = new Date()
     return [
         'You are Jellyfish, a helpful personal AI assistant for Telegram.',
@@ -18,37 +19,30 @@ const systemPrompt = (): string => {
     ].join('\n')
 }
 
-const extractTextFromEvent = (event: unknown): string => {
-    if (typeof event !== 'object' || event === null) return ''
-    const e = event as Record<string, unknown>
-
-    // Final result message from the SDK
-    if (typeof e['result'] === 'string') return e['result']
-
-    // Streaming text delta
-    if (typeof e['text'] === 'string') return e['text']
-    if (typeof e['delta'] === 'object' && e['delta'] !== null) {
-        const delta = e['delta'] as Record<string, unknown>
-        if (typeof delta['text'] === 'string') return delta['text']
+const extractTextDelta = (event: SDKMessage): string => {
+    // Streaming partial assistant message — dig into the raw Anthropic stream event
+    if (event.type === 'stream_event') {
+        const e = event.event as Record<string, unknown>
+        if (e['type'] === 'content_block_delta') {
+            const delta = e['delta'] as Record<string, unknown>
+            if (delta['type'] === 'text_delta' && typeof delta['text'] === 'string') {
+                return delta['text']
+            }
+        }
     }
-
-    // Assistant message with content blocks
-    if (Array.isArray(e['content'])) {
-        return e['content']
-            .filter((b: unknown) => typeof b === 'object' && b !== null && (b as Record<string, unknown>)['type'] === 'text')
-            .map((b: unknown) => (b as Record<string, unknown>)['text'] as string)
-            .join('')
-    }
-
     return ''
 }
 
-const extractSdkSessionId = (event: unknown): string | undefined => {
-    if (typeof event !== 'object' || event === null) return undefined
-    const e = event as Record<string, unknown>
-    // SDK emits { type: "system", subtype: "init", session_id: "..." } as the first event
-    if (e['type'] === 'system' && e['subtype'] === 'init' && typeof e['session_id'] === 'string') {
-        return e['session_id']
+const extractSessionId = (event: SDKMessage): string | undefined => {
+    if (event.type === 'system' && event.subtype === 'init') {
+        return event.session_id
+    }
+    return undefined
+}
+
+const extractFinalText = (event: SDKMessage): string | undefined => {
+    if (event.type === 'result' && event.subtype === 'success') {
+        return event.result
     }
     return undefined
 }
@@ -60,54 +54,65 @@ export const runAgent = async (chatId: string, messageText: string, onChunk?: On
     console.log(`[agent] session — ${session.messages.length} messages, sdkSessionId: ${session.sdkSessionId ?? 'none'}`)
 
     const userMessage: SessionMessage = { role: 'user', content: messageText, timestamp: nowIso() }
-    let capturedSdkSessionId: string | undefined = session.sdkSessionId
-    let rawText = ''
+    let capturedSessionId: string | undefined = session.sdkSessionId
+    let accumulatedText = ''
+    let finalResult: string | undefined
 
     try {
-        // Build query options — resume existing SDK session if we have one
-        const queryOptions = {
-            prompt: messageText,
-            systemPrompt: systemPrompt(),
-            tools: [...BUILTIN_TOOLS, ...customMemoryTools] as unknown,
-            permissionMode: 'bypassPermissions' as const,
-            options: {
-                stream: true,
-                ...(session.sdkSessionId ? { resume: session.sdkSessionId } : {})
-            }
-        }
-
         console.log(`[agent] calling query()${session.sdkSessionId ? ` (resuming ${session.sdkSessionId})` : ' (new session)'}`)
 
-        const response = await query(queryOptions as never)
+        const response = query({
+            prompt: messageText,
+            options: {
+                systemPrompt: buildSystemPrompt(),
+                tools: BUILTIN_TOOLS,
+                permissionMode: 'bypassPermissions',
+                allowDangerouslySkipPermissions: true,
+                includePartialMessages: true,
+                cwd: process.cwd(),
+                additionalDirectories: [os.homedir()],
+                mcpServers: {
+                    'jellyfish-memory': memoryMcpServer
+                },
+                ...(session.sdkSessionId ? { resume: session.sdkSessionId } : {})
+            }
+        })
+
         let eventCount = 0
 
-        for await (const event of response as AsyncIterable<unknown>) {
+        for await (const event of response) {
             eventCount++
 
-            // Capture SDK session ID from the init event
-            const sid = extractSdkSessionId(event)
+            const sid = extractSessionId(event)
             if (sid) {
-                capturedSdkSessionId = sid
-                console.log(`[agent] captured sdkSessionId: ${sid}`)
+                capturedSessionId = sid
+                console.log(`[agent] sdkSessionId: ${sid}`)
             }
 
-            const chunk = extractTextFromEvent(event)
-            if (!chunk) continue
+            const delta = extractTextDelta(event)
+            if (delta) {
+                accumulatedText += delta
+                if (onChunk) await onChunk(markdownToHtml(accumulatedText))
+            }
 
-            rawText += chunk
-            if (onChunk) await onChunk(markdownToHtml(rawText))
+            const result = extractFinalText(event)
+            if (result !== undefined) {
+                finalResult = result
+            }
         }
 
-        console.log(`[agent] done — ${eventCount} events, response length: ${rawText.length}`)
+        console.log(`[agent] done — ${eventCount} events, accumulated: ${accumulatedText.length} chars`)
+
+        // Prefer the SDK's authoritative result string; fall back to accumulated deltas
+        const rawText = finalResult ?? accumulatedText
 
         if (!rawText.trim()) {
             console.warn('[agent] empty response from SDK')
             return 'I could not generate a response.'
         }
 
-        // Persist session — append both user and assistant messages
         const updatedData: SessionData = {
-            sdkSessionId: capturedSdkSessionId,
+            sdkSessionId: capturedSessionId,
             messages: [...session.messages, userMessage, { role: 'assistant', content: rawText, timestamp: nowIso() }]
         }
         await saveSession(chatId, updatedData)
@@ -115,8 +120,7 @@ export const runAgent = async (chatId: string, messageText: string, onChunk?: On
         return markdownToHtml(rawText)
     } catch (error) {
         console.error('[agent] error:', error)
-        // Still save the user message so context isn't lost
-        await saveSession(chatId, { sdkSessionId: capturedSdkSessionId, messages: [...session.messages, userMessage] })
+        await saveSession(chatId, { sdkSessionId: capturedSessionId, messages: [...session.messages, userMessage] })
         throw error
     }
 }
