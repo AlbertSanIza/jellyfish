@@ -4,14 +4,14 @@ import { startCronScheduler } from './src/cron'
 
 const bot = createBot()
 
-await startCronScheduler(async (job) => {
+startCronScheduler(async (job) => {
     try {
         const result = await runAgent(job.chatId, job.prompt)
         await bot.api.sendMessage(Number(job.chatId), result)
     } catch (err) {
         console.error('Cron job failed:', job.id, err)
     }
-})
+}).catch(console.error)
 
 bot.start()
 
