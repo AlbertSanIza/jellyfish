@@ -10,13 +10,13 @@
         "start": "bun src/index.ts",
         "prettier": "prettier --check .",
         "prettier:fix": "prettier --write .",
-        "prepare": "husky",
         "daemon:start": "pm2 start src/index.ts --interpreter bun --name jellyfish",
         "daemon:stop": "pm2 stop jellyfish",
         "daemon:restart": "pm2 restart jellyfish",
         "daemon:status": "pm2 status jellyfish",
         "daemon:logs": "pm2 logs jellyfish",
         "daemon:save": "pm2 save"
+        "prepare": "husky"
     },
     "dependencies": {
         "node-cron": "^4.2.1"
