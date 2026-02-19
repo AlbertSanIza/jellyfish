@@ -5,14 +5,11 @@ import { runAgent } from './agent'
 import { addCron, loadCrons, removeCron } from './cron'
 import { killJob, listJobs, loadJobs, spawnJob, type AgentName } from './jobs'
 import { clearSession, loadSession } from './session'
+import { ALLOWED_CHAT_IDS, BOT_TOKEN } from './utils'
 
 export const createBot = (): Bot => {
-    const token = process.env.BOT_TOKEN
-    if (!token) {
-        throw new Error('Missing BOT_TOKEN')
-    }
-    const allowedChats = parseAllowedChatIds(process.env.ALLOWED_CHAT_IDS)
-    const bot = new Bot(token)
+    const allowedChats = parseAllowedChatIds(ALLOWED_CHAT_IDS)
+    const bot = new Bot(BOT_TOKEN)
     void bot.api.setMyCommands([
         { command: 'new', description: 'Clear session and start fresh' }
         // { command: 'status', description: 'Check session status' },
