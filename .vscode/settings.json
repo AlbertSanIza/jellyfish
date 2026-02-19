@@ -1,6 +1,5 @@
 {
-    "cSpell.language": "en,es-ES",
-    "cSpell.words": ["jellyfish", "grammy", "chatid", "cron", "dotenv"],
+    "cSpell.language": "en",
     "editor.codeActionsOnSave": {
         "source.organizeImports": "explicit"
     },
