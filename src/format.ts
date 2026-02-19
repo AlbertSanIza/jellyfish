@@ -1,30 +1,45 @@
 /**
  * Converts standard markdown to Telegram HTML.
  * Telegram supports: <b>, <i>, <u>, <s>, <code>, <pre>, <a href="">
+ *
+ * Uses placeholder substitution to protect code spans from italic/bold processing.
  */
 export const markdownToHtml = (text: string): string => {
-    // Escape HTML special chars first (order matters)
-    let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const protected_: string[] = []
 
-    // Fenced code blocks (``` ... ```) — before inline code
-    html = html.replace(/```(?:\w+)?\n?([\s\S]*?)```/g, (_, code: string) => `<pre><code>${code.trimEnd()}</code></pre>`)
+    const protect = (html: string): string => {
+        const idx = protected_.length
+        protected_.push(html)
+        return `\x00P${idx}\x00`
+    }
 
-    // Inline code
-    html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    // Escape HTML special chars
+    let out = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    // Protect fenced code blocks first (``` ... ```) — multi-line safe
+    out = out.replace(/```(?:\w+)?\n?([\s\S]*?)```/g, (_, code: string) => protect(`<pre><code>${code.trimEnd()}</code></pre>`))
+
+    // Protect inline code (` ... `)
+    out = out.replace(/`([^`\n]+)`/g, (_, code: string) => protect(`<code>${code}</code>`))
 
     // Bold — **text** or __text__
-    html = html.replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')
-    html = html.replace(/__(.+?)__/gs, '<b>$1</b>')
+    out = out.replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')
+    out = out.replace(/__(.+?)__/gs, '<b>$1</b>')
 
-    // Italic — *text* or _text_ (single, not already bold)
-    html = html.replace(/\*([^*\n]+?)\*/g, '<i>$1</i>')
-    html = html.replace(/_([^_\n]+?)_/g, '<i>$1</i>')
+    // Italic — *text* (single asterisk, not part of **)
+    out = out.replace(/(?<!\*)\*(?!\*)([^*\n]+?)(?<!\*)\*(?!\*)/g, '<i>$1</i>')
+
+    // Italic — _text_ only at word boundaries (prevents matching snake_case)
+    out = out.replace(/(?<!\w)_([^_\n]+?)_(?!\w)/g, '<i>$1</i>')
 
     // Strikethrough — ~~text~~
-    html = html.replace(/~~(.+?)~~/gs, '<s>$1</s>')
+    out = out.replace(/~~(.+?)~~/gs, '<s>$1</s>')
 
     // Links — [text](url)
-    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2">$1</a>')
+    out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2">$1</a>')
 
-    return html
+    // Restore protected code spans
+    out = out.replace(/\x00P(\d+)\x00/g, (_, idx: string) => protected_[parseInt(idx, 10)] ?? '')
+
+    return out
 }

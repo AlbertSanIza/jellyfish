@@ -160,7 +160,8 @@ export const createBot = (): Bot => {
         await ctx.reply('⬆️ Updating jellyfish...')
         try {
             const cwd = `${import.meta.dir}/..`
-            await runCommand(['git', 'pull', 'origin', 'main'], cwd)
+            const branch = (await runCommand(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd)).trim()
+            await runCommand(['git', 'pull', 'origin', branch], cwd)
             await runCommand(['bun', 'install', '--frozen-lockfile'], cwd)
             const { version } = (await import('../package.json')) as { version: string }
             await ctx.reply(`✅ Updated to v${version} — restarting...`)
