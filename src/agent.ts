@@ -47,6 +47,18 @@ const extractFinalText = (event: SDKMessage): string | undefined => {
     return undefined
 }
 
+const MODEL_ALIASES: Record<string, string> = {
+    sonnet: 'claude-sonnet-4-20250514',
+    opus: 'claude-opus-4-6',
+    haiku: 'claude-haiku-4-20250514'
+}
+
+const getModel = (): string | undefined => {
+    const modelEnv = Bun.env.CLAUDE_MODEL
+    if (!modelEnv) return undefined
+    return MODEL_ALIASES[modelEnv.toLowerCase()] ?? modelEnv
+}
+
 export const runAgent = async (chatId: string, messageText: string, onChunk?: OnChunk): Promise<string> => {
     console.log(`[agent] chatId: ${chatId} | message: "${messageText.slice(0, 80)}"`)
 
@@ -59,7 +71,10 @@ export const runAgent = async (chatId: string, messageText: string, onChunk?: On
     let finalResult: string | undefined
 
     try {
-        console.log(`[agent] calling query()${session.sdkSessionId ? ` (resuming ${session.sdkSessionId})` : ' (new session)'}`)
+        const model = getModel()
+        console.log(
+            `[agent] calling query()${session.sdkSessionId ? ` (resuming ${session.sdkSessionId})` : ' (new session)'}${model ? ` | model: ${model}` : ''}`
+        )
 
         const response = query({
             prompt: messageText,
@@ -74,6 +89,7 @@ export const runAgent = async (chatId: string, messageText: string, onChunk?: On
                 mcpServers: {
                     'jellyfish-memory': memoryMcpServer
                 },
+                ...(model ? { model } : {}),
                 ...(session.sdkSessionId ? { resume: session.sdkSessionId } : {})
             }
         })
