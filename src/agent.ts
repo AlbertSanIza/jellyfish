@@ -5,7 +5,7 @@ import path from 'node:path'
 import telegramifyMarkdown from 'telegramify-markdown'
 
 import { loadSession, saveSession, type SessionData, type SessionMessage } from './session'
-import { memoryMcpServer } from './tools'
+import { createJellyfishMcpServer } from './tools'
 
 type OnChunk = (partialText: string) => Promise<void> | void
 
@@ -106,7 +106,12 @@ const prepareClaudeRuntimeEnv = async (): Promise<void> => {
     }
 }
 
-const executeQueryAttempt = async (messageText: string, onChunk: OnChunk | undefined, options: QueryAttemptOptions): Promise<QueryExecutionResult> => {
+const executeQueryAttempt = async (
+    messageText: string,
+    onChunk: OnChunk | undefined,
+    options: QueryAttemptOptions,
+    mcpServer: ReturnType<typeof createJellyfishMcpServer>
+): Promise<QueryExecutionResult> => {
     let capturedSessionId = options.resumeSessionId
     let accumulatedText = ''
     let finalResult: string | undefined
@@ -123,7 +128,7 @@ const executeQueryAttempt = async (messageText: string, onChunk: OnChunk | undef
             ...(options.includeMemoryMcp
                 ? {
                       mcpServers: {
-                          'jellyfish-memory': memoryMcpServer
+                          'jellyfish-memory': mcpServer
                       }
                   }
                 : {}),
@@ -170,6 +175,7 @@ export const runAgent = async (chatId: number, messageText: string, onChunk?: On
     const userMessage: SessionMessage = { role: 'user', content: messageText, timestamp: nowIso() }
     let capturedSessionId: string | undefined = session.sdkSessionId
     const configuredModel = getModel()
+    const mcpServer = createJellyfishMcpServer(chatId)
 
     try {
         const attempts: QueryAttemptOptions[] = [
@@ -226,7 +232,7 @@ export const runAgent = async (chatId: number, messageText: string, onChunk?: On
         for (const attempt of attempts) {
             try {
                 console.log(`[agent] attempt ${attempt.label}`)
-                const execution = await executeQueryAttempt(messageText, onChunk, attempt)
+                const execution = await executeQueryAttempt(messageText, onChunk, attempt, mcpServer)
                 const rawText = execution.finalResult ?? execution.accumulatedText
                 capturedSessionId = execution.sessionId
 

@@ -1,11 +1,16 @@
-import { Bot, Context, type NextFunction } from 'grammy'
-import { homedir } from 'node:os'
+import { Bot, Context, InputFile, type NextFunction } from 'grammy'
+import { mkdir } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 
 import { runAgent } from './agent'
 import { addCron, loadCrons, removeCron } from './cron'
 import { killJob, listJobs, loadJobs, spawnJob, type AgentName } from './jobs'
 import { clearSession, loadSession } from './session'
+import { drainPendingFilesForChat } from './tools'
 import { ALLOWED_CHAT_IDS, BOT_TOKEN } from './utils'
+
+const inboxDir = path.join(os.homedir(), '.jellyfish', 'inbox')
 
 export const createBot = (): Bot => {
     const allowedChats = parseAllowedChatIds(ALLOWED_CHAT_IDS)
@@ -164,7 +169,66 @@ export const createBot = (): Bot => {
         try {
             const finalText = await runAgent(ctx.chat.id, ctx.message.text)
             await ctx.reply(finalText, { parse_mode: 'MarkdownV2' })
+            const pendingFiles = drainPendingFilesForChat(ctx.chat.id)
+            for (const pending of pendingFiles) {
+                try {
+                    await ctx.replyWithDocument(new InputFile(pending.filePath), pending.caption ? { caption: pending.caption } : undefined)
+                } catch (error) {
+                    console.error(`[telegram] failed to send queued file ${pending.filePath}:`, error)
+                }
+            }
         } catch (error) {
+            void drainPendingFilesForChat(ctx.chat.id)
+            const visibleError = `Agent Error: ${error instanceof Error ? error.message : 'Unknown'}`
+            console.error(visibleError)
+            await ctx.reply(visibleError)
+        } finally {
+            clearInterval(typingLoop)
+            await setProcessingReaction(ctx, false)
+        }
+    })
+
+    bot.on('message:photo', async (ctx) => {
+        const typingLoop = startTypingLoop(ctx)
+        await setProcessingReaction(ctx, true)
+        try {
+            const largestPhoto = ctx.message.photo.at(-1)
+            if (!largestPhoto) {
+                await ctx.reply('I could not process that photo.')
+                return
+            }
+
+            const telegramFile = await ctx.api.getFile(largestPhoto.file_id)
+            if (!telegramFile.file_path) {
+                await ctx.reply('I could not download that photo from Telegram.')
+                return
+            }
+
+            await mkdir(inboxDir, { recursive: true })
+            const imagePath = path.join(inboxDir, `${Date.now()}-${largestPhoto.file_unique_id}.jpg`)
+            const downloadUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${telegramFile.file_path}`
+            const response = await fetch(downloadUrl)
+            if (!response.ok) {
+                throw new Error(`Telegram file download failed (${response.status})`)
+            }
+            await Bun.write(imagePath, response)
+
+            const caption = ctx.message.caption?.trim()
+            const prompt = `[Image: ${imagePath}]\n${caption && caption.length > 0 ? caption : 'The user sent you this image.'}`
+
+            const finalText = await runAgent(ctx.chat.id, prompt)
+            await ctx.reply(finalText, { parse_mode: 'MarkdownV2' })
+
+            const pendingFiles = drainPendingFilesForChat(ctx.chat.id)
+            for (const pending of pendingFiles) {
+                try {
+                    await ctx.replyWithDocument(new InputFile(pending.filePath), pending.caption ? { caption: pending.caption } : undefined)
+                } catch (error) {
+                    console.error(`[telegram] failed to send queued file ${pending.filePath}:`, error)
+                }
+            }
+        } catch (error) {
+            void drainPendingFilesForChat(ctx.chat.id)
             const visibleError = `Agent Error: ${error instanceof Error ? error.message : 'Unknown'}`
             console.error(visibleError)
             await ctx.reply(visibleError)
@@ -271,7 +335,7 @@ const parseRunArgs = (input: string): { agent: AgentName; task: string; workdir:
 
     const rest = restParts.join(' ').trim()
     const workdirRegex = /(?:^|\s)--workdir\s+("[^"]+"|'[^']+'|\S+)/g
-    let workdir = Bun.env.HOME ?? process.env.HOME ?? homedir()
+    let workdir = Bun.env.HOME ?? process.env.HOME ?? os.homedir()
     let taskText = rest
 
     const matches = [...rest.matchAll(workdirRegex)]

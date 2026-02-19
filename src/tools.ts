@@ -5,6 +5,12 @@ import path from 'node:path'
 import { z } from 'zod'
 
 const memoryDir = path.join(os.homedir(), '.jellyfish', 'memory')
+const pendingFilesByChat = new Map<number, PendingTelegramFile[]>()
+
+export interface PendingTelegramFile {
+    filePath: string
+    caption?: string
+}
 
 const memoryReadTool = tool(
     'memory_read',
@@ -32,7 +38,35 @@ const memoryWriteTool = tool(
     }
 )
 
-export const memoryMcpServer: McpSdkServerConfigWithInstance = createSdkMcpServer({
-    name: 'jellyfish-memory',
-    tools: [memoryReadTool, memoryWriteTool]
-})
+export const drainPendingFilesForChat = (chatId: number): PendingTelegramFile[] => {
+    const pending = pendingFilesByChat.get(chatId) ?? []
+    pendingFilesByChat.delete(chatId)
+    return pending
+}
+
+export const createJellyfishMcpServer = (chatId: number): McpSdkServerConfigWithInstance => {
+    const telegramSendFileTool = tool(
+        'telegram_send_file',
+        'Queue a local file so Jellyfish can send it to the Telegram user as a document. Use an absolute file path.',
+        {
+            file_path: z.string().describe('Absolute path to the file on local filesystem'),
+            caption: z.string().optional().describe('Optional caption for the Telegram document')
+        },
+        async ({ file_path, caption }) => {
+            if (!path.isAbsolute(file_path)) {
+                return { content: [{ type: 'text' as const, text: 'File path must be absolute' }] }
+            }
+
+            const existing = pendingFilesByChat.get(chatId) ?? []
+            existing.push({ filePath: file_path, caption })
+            pendingFilesByChat.set(chatId, existing)
+
+            return { content: [{ type: 'text' as const, text: `File queued for sending: ${file_path}` }] }
+        }
+    )
+
+    return createSdkMcpServer({
+        name: 'jellyfish-memory',
+        tools: [memoryReadTool, memoryWriteTool, telegramSendFileTool]
+    })
+}
