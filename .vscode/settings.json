@@ -1,0 +1,27 @@
+{
+    "cSpell.language": "en,es-ES",
+    "cSpell.words": ["jellyfish", "grammy", "chatid", "cron", "dotenv"],
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.guides.bracketPairs": "active",
+    "editor.linkedEditing": true,
+    "editor.quickSuggestions": {
+        "strings": "on"
+    },
+    "files.insertFinalNewline": true,
+    "files.readonlyInclude": {
+        "**/bun.lock": true
+    },
+    "files.watcherExclude": {
+        "**/bun.lock": true
+    },
+    "git.autofetch": true,
+    "git.confirmSync": false,
+    "search.exclude": {
+        "**/bun.lock": true
+    },
+    "workbench.iconTheme": "material-icon-theme"
+}
