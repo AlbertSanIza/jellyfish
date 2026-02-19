@@ -194,7 +194,7 @@ export const createBot = (): Bot => {
         }
     })
 
-    bot.catch((error) => console.error('Telegram bot error:', error.error))
+    bot.catch((error) => console.error('Telegram Bot Error:', error))
 
     return bot
 }
