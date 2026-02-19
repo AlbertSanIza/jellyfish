@@ -2,8 +2,8 @@
     "name": "jellyfish",
     "description": "",
     "version": "1.0.0",
+    "module": "index.ts",
     "private": true,
-    "module": "src/index.ts",
     "scripts": {
         "dev": "bun --watch src/index.ts",
         "start": "bun src/index.ts",
