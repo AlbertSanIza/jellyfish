@@ -1,0 +1,55 @@
+name: Release
+on:
+    push:
+        branches:
+            - main
+permissions:
+    contents: write
+jobs:
+    release:
+        name: Bump, Release
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  token: ${{ secrets.RELEASE_TOKEN }}
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+            - name: Install
+              run: bun install --frozen-lockfile
+            - name: Bump Version
+              id: version
+              run: |
+                  LATEST_TAG="$(git tag --list 'v*' --sort=-v:refname | head -n1)"
+                  if [ -z "$LATEST_TAG" ]; then
+                    NEW_VERSION="$(jq -r '.version' package.json)"
+                  else
+                    VERSION="${LATEST_TAG#v}"
+                    IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+                    PATCH=$((PATCH + 1))
+                    NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+                  fi
+                  jq --arg v "$NEW_VERSION" '.version = $v' package.json > package.json.tmp
+                  mv package.json.tmp package.json
+                  bunx prettier --write package.json
+                  echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+                  echo "tag=v$NEW_VERSION" >> "$GITHUB_OUTPUT"
+            - name: Commit and Push
+              run: |
+                  if git diff --quiet package.json; then
+                    echo "No version change to commit."
+                    exit 0
+                  fi
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git add package.json
+                  git commit -m "Release: v${{ steps.version.outputs.version }} [skip actions]"
+                  git tag "${{ steps.version.outputs.tag }}"
+                  git push origin HEAD:main --follow-tags
+            - name: GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ steps.version.outputs.tag }}
+                  generate_release_notes: true

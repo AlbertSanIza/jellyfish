@@ -88,6 +88,16 @@ const startTypingLoop = (ctx: Context): NodeJS.Timeout =>
         void ctx.replyWithChatAction('typing')
     }, 4000)
 
+const runCommand = async (cmd: string[], cwd: string): Promise<string> => {
+    const proc = Bun.spawn(cmd, { cwd, stdout: 'pipe', stderr: 'pipe' })
+    const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
+    const output = [stdout, stderr].filter(Boolean).join('\n').trim()
+    if (exitCode !== 0) {
+        throw new Error(output || `Command failed: ${cmd.join(' ')}`)
+    }
+    return output
+}
+
 export const createBot = (): Bot => {
     const token = process.env.BOT_TOKEN
     if (!token) {
@@ -123,6 +133,31 @@ export const createBot = (): Bot => {
 
         const messages = await loadSession(chatId)
         await ctx.reply(`Session has ${messages.length} messages.`)
+    })
+
+    bot.command('update', async (ctx) => {
+        const chatId = String(ctx.chat?.id ?? '')
+        if (!chatId) {
+            return
+        }
+        if (!isAllowedChat(chatId, allowedChats)) {
+            await ctx.reply('Access denied.')
+            return
+        }
+
+        await ctx.reply('⬆️ Updating jellyfish-ai...')
+
+        try {
+            const cwd = `${import.meta.dir}/..`
+            await runCommand(['git', 'pull', 'origin', 'main'], cwd)
+            await runCommand(['bun', 'install', '--frozen-lockfile'], cwd)
+            const { version } = (await import('../package.json')) as { version: string }
+            await ctx.reply(`✅ Updated to v${version} — restarting...`)
+            await runCommand(['pm2', 'restart', 'jellyfish-ai'], cwd)
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            await ctx.reply(`❌ Update failed: ${message}`)
+        }
     })
 
     bot.command('cron', async (ctx) => {
