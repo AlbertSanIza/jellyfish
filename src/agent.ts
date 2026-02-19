@@ -1,5 +1,7 @@
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import { mkdir } from 'node:fs/promises'
 import os from 'node:os'
+import path from 'node:path'
 import telegramifyMarkdown from 'telegramify-markdown'
 
 import { loadSession, saveSession, type SessionData, type SessionMessage } from './session'
@@ -49,95 +51,213 @@ const extractFinalText = (event: SDKMessage): string | undefined => {
 }
 
 const MODEL_ALIASES: Record<string, string> = {
-    sonnet: 'claude-sonnet-4-20250514',
+    sonnet: 'claude-sonnet-4-6',
     opus: 'claude-opus-4-6',
-    haiku: 'claude-haiku-4-20250514'
+    // Prefer account default for "haiku" shorthand to avoid stale model IDs.
+    haiku: ''
 }
 
 const getModel = (): string | undefined => {
     const modelEnv = Bun.env.CLAUDE_MODEL
     if (!modelEnv) return undefined
-    return MODEL_ALIASES[modelEnv.toLowerCase()] ?? modelEnv
+    const resolved = MODEL_ALIASES[modelEnv.toLowerCase()] ?? modelEnv
+    return resolved.trim() ? resolved : undefined
+}
+
+interface QueryAttemptOptions {
+    label: string
+    resumeSessionId?: string
+    includePartialMessages: boolean
+    includeMemoryMcp: boolean
+    includeBuiltinTools: boolean
+    bypassPermissions: boolean
+    model?: string
+}
+
+interface QueryExecutionResult {
+    sessionId?: string
+    accumulatedText: string
+    finalResult?: string
+}
+
+const isClaudeProcessExitError = (error: unknown): boolean => {
+    const message = error instanceof Error ? error.message : String(error)
+    return message.includes('Claude Code process exited with code')
+}
+
+const getErrorSummary = (error: unknown): string => {
+    const message = error instanceof Error ? error.message : String(error)
+    return message.replace(/\s+/g, ' ').trim().slice(0, 220)
+}
+
+const prepareClaudeRuntimeEnv = async (): Promise<void> => {
+    if (process.env.DEBUG_CLAUDE_AGENT_SDK) {
+        console.warn('[agent] DEBUG_CLAUDE_AGENT_SDK is enabled; disabling for bot runtime')
+        delete process.env.DEBUG_CLAUDE_AGENT_SDK
+    }
+
+    const debugDir = path.join(process.cwd(), '.jellyfish', 'claude-debug')
+    try {
+        await mkdir(debugDir, { recursive: true })
+        // SDK expects a file path here, not a directory path.
+        process.env.CLAUDE_CODE_DEBUG_LOGS_DIR = path.join(debugDir, 'sdk.log')
+    } catch {
+        // Ignore debug dir setup failures; SDK can still run without this override.
+    }
+}
+
+const executeQueryAttempt = async (messageText: string, onChunk: OnChunk | undefined, options: QueryAttemptOptions): Promise<QueryExecutionResult> => {
+    let capturedSessionId = options.resumeSessionId
+    let accumulatedText = ''
+    let finalResult: string | undefined
+
+    const response = query({
+        prompt: messageText,
+        options: {
+            systemPrompt: buildSystemPrompt(),
+            tools: options.includeBuiltinTools ? BUILTIN_TOOLS : [],
+            ...(options.bypassPermissions ? { permissionMode: 'bypassPermissions' as const, allowDangerouslySkipPermissions: true } : {}),
+            includePartialMessages: options.includePartialMessages,
+            cwd: process.cwd(),
+            additionalDirectories: [os.homedir()],
+            ...(options.includeMemoryMcp
+                ? {
+                      mcpServers: {
+                          'jellyfish-memory': memoryMcpServer
+                      }
+                  }
+                : {}),
+            ...(options.model ? { model: options.model } : {}),
+            ...(options.resumeSessionId ? { resume: options.resumeSessionId } : {})
+        }
+    })
+
+    let eventCount = 0
+
+    for await (const event of response) {
+        eventCount++
+
+        const sid = extractSessionId(event)
+        if (sid) {
+            capturedSessionId = sid
+            console.log(`[agent] sdkSessionId: ${sid}`)
+        }
+
+        const delta = extractTextDelta(event)
+        if (delta) {
+            accumulatedText += delta
+            if (onChunk) await onChunk(telegramifyMarkdown(accumulatedText, 'escape'))
+        }
+
+        const result = extractFinalText(event)
+        if (result !== undefined) {
+            finalResult = result
+        }
+    }
+
+    console.log(`[agent] done — ${eventCount} events, accumulated: ${accumulatedText.length} chars`)
+
+    return { sessionId: capturedSessionId, accumulatedText, finalResult }
 }
 
 export const runAgent = async (chatId: number, messageText: string, onChunk?: OnChunk): Promise<string> => {
     console.log(`[agent] chatId: ${chatId} | message: "${messageText.slice(0, 80)}"`)
+    await prepareClaudeRuntimeEnv()
 
     const session = await loadSession(chatId)
     console.log(`[agent] session — ${session.messages.length} messages, sdkSessionId: ${session.sdkSessionId ?? 'none'}`)
 
     const userMessage: SessionMessage = { role: 'user', content: messageText, timestamp: nowIso() }
     let capturedSessionId: string | undefined = session.sdkSessionId
-    let accumulatedText = ''
-    let finalResult: string | undefined
+    const configuredModel = getModel()
 
     try {
-        const model = getModel()
-        console.log(
-            `[agent] calling query()${session.sdkSessionId ? ` (resuming ${session.sdkSessionId})` : ' (new session)'}${model ? ` | model: ${model}` : ''}`
-        )
-
-        const response = query({
-            prompt: messageText,
-            options: {
-                systemPrompt: buildSystemPrompt(),
-                tools: BUILTIN_TOOLS,
-                permissionMode: 'bypassPermissions',
-                allowDangerouslySkipPermissions: true,
+        const attempts: QueryAttemptOptions[] = [
+            {
+                label: 'resume/full',
+                resumeSessionId: session.sdkSessionId,
                 includePartialMessages: true,
-                cwd: process.cwd(),
-                additionalDirectories: [os.homedir()],
-                mcpServers: {
-                    'jellyfish-memory': memoryMcpServer
-                },
-                ...(model ? { model } : {}),
-                ...(session.sdkSessionId ? { resume: session.sdkSessionId } : {})
+                includeMemoryMcp: true,
+                includeBuiltinTools: true,
+                bypassPermissions: true,
+                model: configuredModel
+            },
+            {
+                label: 'fresh/full',
+                includePartialMessages: true,
+                includeMemoryMcp: true,
+                includeBuiltinTools: true,
+                bypassPermissions: true,
+                model: configuredModel
+            },
+            {
+                label: 'fresh/full/default-model',
+                includePartialMessages: true,
+                includeMemoryMcp: true,
+                includeBuiltinTools: true,
+                bypassPermissions: true
+            },
+            {
+                label: 'fresh/no-mcp-no-partials',
+                includePartialMessages: false,
+                includeMemoryMcp: false,
+                includeBuiltinTools: true,
+                bypassPermissions: true
+            },
+            {
+                label: 'fresh/minimal',
+                includePartialMessages: false,
+                includeMemoryMcp: false,
+                includeBuiltinTools: false,
+                bypassPermissions: true
+            },
+            {
+                label: 'fresh/minimal/default-permissions',
+                includePartialMessages: false,
+                includeMemoryMcp: false,
+                includeBuiltinTools: false,
+                bypassPermissions: false
             }
-        })
+        ]
 
-        let eventCount = 0
+        let lastProcessExitError: unknown
+        let sawNonCrashFailure = false
 
-        for await (const event of response) {
-            eventCount++
+        for (const attempt of attempts) {
+            try {
+                console.log(`[agent] attempt ${attempt.label}`)
+                const execution = await executeQueryAttempt(messageText, onChunk, attempt)
+                const rawText = execution.finalResult ?? execution.accumulatedText
+                capturedSessionId = execution.sessionId
 
-            const sid = extractSessionId(event)
-            if (sid) {
-                capturedSessionId = sid
-                console.log(`[agent] sdkSessionId: ${sid}`)
-            }
+                if (!rawText.trim()) {
+                    console.warn(`[agent] empty response on attempt ${attempt.label}`)
+                    sawNonCrashFailure = true
+                    continue
+                }
 
-            const delta = extractTextDelta(event)
-            if (delta) {
-                accumulatedText += delta
-                if (onChunk) await onChunk(telegramifyMarkdown(accumulatedText, 'escape'))
-            }
+                const updatedData: SessionData = {
+                    sdkSessionId: capturedSessionId,
+                    messages: [...session.messages, userMessage, { role: 'assistant', content: rawText, timestamp: nowIso() }]
+                }
+                await saveSession(chatId, updatedData)
 
-            const result = extractFinalText(event)
-            if (result !== undefined) {
-                finalResult = result
+                return telegramifyMarkdown(rawText, 'escape')
+            } catch (error) {
+                if (!isClaudeProcessExitError(error)) throw error
+                lastProcessExitError = error
+                console.warn(`[agent] process exit on attempt ${attempt.label}: ${getErrorSummary(error)}`)
             }
         }
 
-        console.log(`[agent] done — ${eventCount} events, accumulated: ${accumulatedText.length} chars`)
-
-        // Prefer the SDK's authoritative result string; fall back to accumulated deltas
-        const rawText = finalResult ?? accumulatedText
-
-        if (!rawText.trim()) {
-            console.warn('[agent] empty response from SDK')
-            return 'I could not generate a response.'
+        if (lastProcessExitError && !sawNonCrashFailure) {
+            throw new Error('Claude Code process exited repeatedly. Please try again in a minute.')
         }
-
-        const updatedData: SessionData = {
-            sdkSessionId: capturedSessionId,
-            messages: [...session.messages, userMessage, { role: 'assistant', content: rawText, timestamp: nowIso() }]
-        }
-        await saveSession(chatId, updatedData)
-
-        return telegramifyMarkdown(rawText, 'escape')
+        return 'I could not generate a response right now. Please try again.'
     } catch (error) {
         console.error('[agent] error:', error)
-        await saveSession(chatId, { sdkSessionId: capturedSessionId, messages: [...session.messages, userMessage] })
+        const keepSessionId = isClaudeProcessExitError(error) ? undefined : capturedSessionId
+        await saveSession(chatId, { sdkSessionId: keepSessionId, messages: [...session.messages, userMessage] })
         throw error
     }
 }
