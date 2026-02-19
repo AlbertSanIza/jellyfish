@@ -1,6 +1,6 @@
 import { mkdir, unlink } from 'node:fs/promises'
-import path from 'node:path'
 import os from 'node:os'
+import path from 'node:path'
 
 export type SessionRole = 'system' | 'user' | 'assistant'
 
@@ -33,16 +33,13 @@ const isSessionMessage = (item: unknown): item is SessionMessage => {
 export const loadSession = async (chatId: string): Promise<SessionData> => {
     await ensureSessionsDir()
     const sessionPath = getSessionPath(chatId)
-
     try {
         const raw = await Bun.file(sessionPath).text()
         const parsed = JSON.parse(raw) as unknown
-
         // Legacy format: plain array of messages
         if (Array.isArray(parsed)) {
             return { messages: parsed.filter(isSessionMessage) }
         }
-
         // Current format: { sdkSessionId?, messages[] }
         if (typeof parsed === 'object' && parsed !== null) {
             const data = parsed as Record<string, unknown>
@@ -51,7 +48,6 @@ export const loadSession = async (chatId: string): Promise<SessionData> => {
                 messages: Array.isArray(data.messages) ? data.messages.filter(isSessionMessage) : []
             }
         }
-
         return { messages: [] }
     } catch (error) {
         const err = error as NodeJS.ErrnoException
