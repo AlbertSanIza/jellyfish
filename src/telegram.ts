@@ -6,137 +6,6 @@ import { addCron, loadCrons, removeCron } from './cron'
 import { killJob, listJobs, loadJobs, spawnJob, type AgentName } from './jobs'
 import { clearSession, loadSession } from './session'
 
-const parseAllowedChatIds = (value: string | undefined): Set<string> => {
-    if (!value) return new Set<string>()
-    return new Set(
-        value
-            .split(',')
-            .map((id) => id.trim())
-            .filter(Boolean)
-    )
-}
-
-const accessControlMiddleware = (allowedChats: Set<string>) => {
-    return async (ctx: Context, next: NextFunction): Promise<void> => {
-        const chatId = String(ctx.chat?.id ?? '')
-        if (!chatId) return
-        if (!allowedChats.has(chatId)) {
-            await ctx.reply('Access denied.')
-            return
-        }
-        await next()
-    }
-}
-
-const parseCronAddArgs = (input: string): { schedule: string; prompt: string } | null => {
-    const trimmed = input.trim()
-    if (!trimmed) return null
-
-    if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
-        const quote = trimmed[0]
-        if (!quote) return null
-        const closingIdx = trimmed.indexOf(quote, 1)
-        if (closingIdx <= 1) return null
-        const schedule = trimmed.slice(1, closingIdx).trim()
-        const prompt = trimmed.slice(closingIdx + 1).trim()
-        if (!schedule || !prompt) return null
-        return { schedule, prompt }
-    }
-
-    const parts = trimmed.split(/\s+/)
-    for (const cronFieldCount of [5, 6]) {
-        if (parts.length <= cronFieldCount) continue
-        const schedule = parts.slice(0, cronFieldCount).join(' ')
-        const prompt = parts.slice(cronFieldCount).join(' ').trim()
-        if (!prompt) continue
-        return { schedule, prompt }
-    }
-
-    return null
-}
-
-const cronHelpText = [
-    '🕐 Cron commands:',
-    '',
-    '/cron list — list your cron jobs',
-    '/cron add <schedule> <prompt> — create a new cron job',
-    '  Example: /cron add "0 9 * * *" Give me a morning weather summary',
-    '/cron remove <id> — delete a cron job',
-    '',
-    'Schedule format: standard cron (minute hour day month weekday)',
-    'Examples:',
-    '  0 9 * * *     — every day at 9am',
-    '  0 9 * * 1     — every Monday at 9am',
-    '  */30 * * * *  — every 30 minutes'
-].join('\n')
-
-const safeEditMessage = async (bot: Bot, chatId: number, messageId: number, text: string, html = false): Promise<void> => {
-    const trimmedText = text.trim()
-    if (!trimmedText) return
-    try {
-        await bot.api.editMessageText(chatId, messageId, trimmedText, html ? { parse_mode: 'MarkdownV2' } : undefined)
-    } catch (error) {
-        const err = error as { description?: string }
-        if (typeof err.description === 'string' && err.description.includes('message is not modified')) return
-        throw error
-    }
-}
-
-const startTypingLoop = (ctx: Context): NodeJS.Timeout =>
-    setInterval(() => {
-        void ctx.replyWithChatAction('typing')
-    }, 4000)
-
-const parseRunArgs = (input: string): { agent: AgentName; task: string; workdir: string } | null => {
-    const trimmed = input.trim()
-    if (!trimmed) return null
-
-    const [agentToken, ...restParts] = trimmed.split(/\s+/)
-    if (!agentToken) return null
-    if (agentToken !== 'codex' && agentToken !== 'opencode' && agentToken !== 'claude') return null
-
-    const rest = restParts.join(' ').trim()
-    const workdirRegex = /(?:^|\s)--workdir\s+("[^"]+"|'[^']+'|\S+)/g
-    let workdir = Bun.env.HOME ?? process.env.HOME ?? homedir()
-    let taskText = rest
-
-    const matches = [...rest.matchAll(workdirRegex)]
-    if (matches.length > 0) {
-        const last = matches[matches.length - 1]
-        const full = last?.[0] ?? ''
-        const captured = last?.[1] ?? ''
-        const normalized = captured.replace(/^['"]|['"]$/g, '').trim()
-        if (normalized) workdir = normalized
-        taskText = taskText.replace(full, ' ').replace(/\s+/g, ' ').trim()
-    }
-
-    if (!taskText) return null
-    return { agent: agentToken, task: taskText, workdir }
-}
-
-const relativeTimeFormat = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-
-const formatRelativeTime = (dateIso: string): string => {
-    const timestamp = Date.parse(dateIso)
-    if (Number.isNaN(timestamp)) return dateIso
-    const diffMs = timestamp - Date.now()
-    const diffSeconds = Math.round(diffMs / 1000)
-    if (Math.abs(diffSeconds) < 60) return relativeTimeFormat.format(diffSeconds, 'second')
-    const diffMinutes = Math.round(diffSeconds / 60)
-    if (Math.abs(diffMinutes) < 60) return relativeTimeFormat.format(diffMinutes, 'minute')
-    const diffHours = Math.round(diffMinutes / 60)
-    if (Math.abs(diffHours) < 24) return relativeTimeFormat.format(diffHours, 'hour')
-    return relativeTimeFormat.format(Math.round(diffHours / 24), 'day')
-}
-
-const runCommand = async (cmd: string[], cwd: string): Promise<string> => {
-    const proc = Bun.spawn(cmd, { cwd, stdout: 'pipe', stderr: 'pipe' })
-    const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
-    const output = [stdout, stderr].filter(Boolean).join('\n').trim()
-    if (exitCode !== 0) throw new Error(output || `Command failed: ${cmd.join(' ')}`)
-    return output
-}
-
 export const createBot = (): Bot => {
     const token = process.env.BOT_TOKEN
     if (!token) {
@@ -334,4 +203,135 @@ export const createBot = (): Bot => {
     bot.catch((error) => console.error('Telegram bot error:', error.error))
 
     return bot
+}
+
+const parseAllowedChatIds = (value: string | undefined): Set<string> => {
+    if (!value) return new Set<string>()
+    return new Set(
+        value
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean)
+    )
+}
+
+const accessControlMiddleware = (allowedChats: Set<string>) => {
+    return async (ctx: Context, next: NextFunction): Promise<void> => {
+        const chatId = String(ctx.chat?.id ?? '')
+        if (!chatId) return
+        if (!allowedChats.has(chatId)) {
+            await ctx.reply('Access denied.')
+            return
+        }
+        await next()
+    }
+}
+
+const parseCronAddArgs = (input: string): { schedule: string; prompt: string } | null => {
+    const trimmed = input.trim()
+    if (!trimmed) return null
+
+    if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
+        const quote = trimmed[0]
+        if (!quote) return null
+        const closingIdx = trimmed.indexOf(quote, 1)
+        if (closingIdx <= 1) return null
+        const schedule = trimmed.slice(1, closingIdx).trim()
+        const prompt = trimmed.slice(closingIdx + 1).trim()
+        if (!schedule || !prompt) return null
+        return { schedule, prompt }
+    }
+
+    const parts = trimmed.split(/\s+/)
+    for (const cronFieldCount of [5, 6]) {
+        if (parts.length <= cronFieldCount) continue
+        const schedule = parts.slice(0, cronFieldCount).join(' ')
+        const prompt = parts.slice(cronFieldCount).join(' ').trim()
+        if (!prompt) continue
+        return { schedule, prompt }
+    }
+
+    return null
+}
+
+const cronHelpText = [
+    '🕐 Cron commands:',
+    '',
+    '/cron list — list your cron jobs',
+    '/cron add <schedule> <prompt> — create a new cron job',
+    '  Example: /cron add "0 9 * * *" Give me a morning weather summary',
+    '/cron remove <id> — delete a cron job',
+    '',
+    'Schedule format: standard cron (minute hour day month weekday)',
+    'Examples:',
+    '  0 9 * * *     — every day at 9am',
+    '  0 9 * * 1     — every Monday at 9am',
+    '  */30 * * * *  — every 30 minutes'
+].join('\n')
+
+const safeEditMessage = async (bot: Bot, chatId: number, messageId: number, text: string, html = false): Promise<void> => {
+    const trimmedText = text.trim()
+    if (!trimmedText) return
+    try {
+        await bot.api.editMessageText(chatId, messageId, trimmedText, html ? { parse_mode: 'MarkdownV2' } : undefined)
+    } catch (error) {
+        const err = error as { description?: string }
+        if (typeof err.description === 'string' && err.description.includes('message is not modified')) return
+        throw error
+    }
+}
+
+const startTypingLoop = (ctx: Context): NodeJS.Timeout =>
+    setInterval(() => {
+        void ctx.replyWithChatAction('typing')
+    }, 4000)
+
+const parseRunArgs = (input: string): { agent: AgentName; task: string; workdir: string } | null => {
+    const trimmed = input.trim()
+    if (!trimmed) return null
+
+    const [agentToken, ...restParts] = trimmed.split(/\s+/)
+    if (!agentToken) return null
+    if (agentToken !== 'codex' && agentToken !== 'opencode' && agentToken !== 'claude') return null
+
+    const rest = restParts.join(' ').trim()
+    const workdirRegex = /(?:^|\s)--workdir\s+("[^"]+"|'[^']+'|\S+)/g
+    let workdir = Bun.env.HOME ?? process.env.HOME ?? homedir()
+    let taskText = rest
+
+    const matches = [...rest.matchAll(workdirRegex)]
+    if (matches.length > 0) {
+        const last = matches[matches.length - 1]
+        const full = last?.[0] ?? ''
+        const captured = last?.[1] ?? ''
+        const normalized = captured.replace(/^['"]|['"]$/g, '').trim()
+        if (normalized) workdir = normalized
+        taskText = taskText.replace(full, ' ').replace(/\s+/g, ' ').trim()
+    }
+
+    if (!taskText) return null
+    return { agent: agentToken, task: taskText, workdir }
+}
+
+const relativeTimeFormat = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+
+const formatRelativeTime = (dateIso: string): string => {
+    const timestamp = Date.parse(dateIso)
+    if (Number.isNaN(timestamp)) return dateIso
+    const diffMs = timestamp - Date.now()
+    const diffSeconds = Math.round(diffMs / 1000)
+    if (Math.abs(diffSeconds) < 60) return relativeTimeFormat.format(diffSeconds, 'second')
+    const diffMinutes = Math.round(diffSeconds / 60)
+    if (Math.abs(diffMinutes) < 60) return relativeTimeFormat.format(diffMinutes, 'minute')
+    const diffHours = Math.round(diffMinutes / 60)
+    if (Math.abs(diffHours) < 24) return relativeTimeFormat.format(diffHours, 'hour')
+    return relativeTimeFormat.format(Math.round(diffHours / 24), 'day')
+}
+
+const runCommand = async (cmd: string[], cwd: string): Promise<string> => {
+    const proc = Bun.spawn(cmd, { cwd, stdout: 'pipe', stderr: 'pipe' })
+    const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
+    const output = [stdout, stderr].filter(Boolean).join('\n').trim()
+    if (exitCode !== 0) throw new Error(output || `Command failed: ${cmd.join(' ')}`)
+    return output
 }
