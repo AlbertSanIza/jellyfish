@@ -13,13 +13,30 @@ const BUILTIN_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetc
 
 const nowIso = (): string => new Date().toISOString()
 
-const buildSystemPrompt = (): string => {
+interface ProjectSkill {
+    name: string
+    path: string
+}
+
+const buildSystemPrompt = (availableSkills: ProjectSkill[] = []): string => {
     const now = new Date()
-    return [
+    const lines = [
         'You are Jellyfish, a helpful personal AI assistant for Telegram.',
         'Be concise, useful, and proactive.',
         `Current date/time: ${now.toISOString()} (${now.toString()})`
-    ].join('\n')
+    ]
+
+    if (availableSkills.length > 0) {
+        lines.push(`Project skills available: ${availableSkills.map((skill) => `/${skill.name}`).join(', ')}`)
+        lines.push('Skill file locations:')
+        for (const skill of availableSkills) {
+            lines.push(`- /${skill.name} => ${skill.path}`)
+        }
+        lines.push('When a user asks about a known skill/domain, prefer using the matching skill rather than saying you are unaware.')
+        lines.push('If a skill is relevant, use the Read tool on its SKILL.md path before answering to ground your response.')
+    }
+
+    return lines.join('\n')
 }
 
 const extractTextDelta = (event: SDKMessage): string => {
@@ -100,6 +117,29 @@ const parseSkillNameFromMarkdown = (content: string): string | undefined => {
     const match = frontmatter.match(/^\s*name\s*:\s*(.+)\s*$/m)
     if (!match?.[1]) return undefined
     return match[1].trim().replace(/^['"]|['"]$/g, '')
+}
+
+const discoverProjectSkills = async (): Promise<ProjectSkill[]> => {
+    const projectSkillsDir = path.join(process.cwd(), 'skills')
+    try {
+        const entries = await readdir(projectSkillsDir, { withFileTypes: true })
+        const skills: ProjectSkill[] = []
+
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue
+            const skillPath = path.join(projectSkillsDir, entry.name, 'SKILL.md')
+            try {
+                const content = await readFile(skillPath, 'utf8')
+                const parsed = parseSkillNameFromMarkdown(content)
+                if (parsed) skills.push({ name: parsed, path: skillPath })
+            } catch {
+                // Ignore invalid skill folders in discovery.
+            }
+        }
+        return skills
+    } catch {
+        return []
+    }
 }
 
 const logSkillDiagnostics = async (): Promise<void> => {
@@ -197,16 +237,24 @@ const executeQueryAttempt = async (
     messageText: string,
     onChunk: OnChunk | undefined,
     options: QueryAttemptOptions,
-    mcpServer: ReturnType<typeof createJellyfishMcpServer>
+    mcpServer: ReturnType<typeof createJellyfishMcpServer>,
+    availableSkills: ProjectSkill[]
 ): Promise<QueryExecutionResult> => {
     let capturedSessionId = options.resumeSessionId
     let accumulatedText = ''
     let finalResult: string | undefined
 
+    const lowerMessage = messageText.toLowerCase()
+    const relevantSkills = availableSkills.filter((skill) => lowerMessage.includes(skill.name.toLowerCase()))
+    const skillHint =
+        relevantSkills.length > 0
+            ? `\n\nKnown related project skill files:\n${relevantSkills.map((skill) => `- ${skill.path}`).join('\n')}\nIf relevant, read these files before answering.`
+            : ''
+
     const response = query({
-        prompt: messageText,
+        prompt: `${messageText}${skillHint}`,
         options: {
-            systemPrompt: buildSystemPrompt(),
+            systemPrompt: buildSystemPrompt(availableSkills),
             tools: options.includeBuiltinTools ? BUILTIN_TOOLS : [],
             ...(options.bypassPermissions ? { permissionMode: 'bypassPermissions' as const, allowDangerouslySkipPermissions: true } : {}),
             includePartialMessages: options.includePartialMessages,
@@ -224,6 +272,17 @@ const executeQueryAttempt = async (
             ...(options.resumeSessionId ? { resume: options.resumeSessionId } : {})
         }
     })
+
+    try {
+        const commands = await response.supportedCommands()
+        const commandNames = commands.map((cmd) => cmd.name)
+        const knownSkills = availableSkills.filter((skill) => commandNames.includes(skill.name))
+        console.log(
+            `[agent] supported slash commands: ${commandNames.length} total${knownSkills.length > 0 ? ` | matched skills: ${knownSkills.map((skill) => skill.name).join(', ')}` : ''}`
+        )
+    } catch (error) {
+        console.warn('[agent] could not read supportedCommands():', error)
+    }
 
     let eventCount = 0
 
@@ -264,6 +323,7 @@ export const runAgent = async (chatId: number, messageText: string, onChunk?: On
     let capturedSessionId: string | undefined = session.sdkSessionId
     const configuredModel = getModel()
     const mcpServer = createJellyfishMcpServer(chatId)
+    const availableSkills = await discoverProjectSkills()
 
     try {
         const attempts: QueryAttemptOptions[] = [
@@ -320,7 +380,7 @@ export const runAgent = async (chatId: number, messageText: string, onChunk?: On
         for (const attempt of attempts) {
             try {
                 console.log(`[agent] attempt ${attempt.label}`)
-                const execution = await executeQueryAttempt(messageText, onChunk, attempt, mcpServer)
+                const execution = await executeQueryAttempt(messageText, onChunk, attempt, mcpServer, availableSkills)
                 const rawText = execution.finalResult ?? execution.accumulatedText
                 capturedSessionId = execution.sessionId
 
