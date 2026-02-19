@@ -160,40 +160,17 @@ export const createBot = (): Bot => {
 
     bot.on('message:text', async (ctx) => {
         const typingLoop = startTypingLoop(ctx)
-        let draftMessageId: number | undefined
-        let lastSentText = ''
-        let lastUpdateMs = 0
+        await setProcessingReaction(ctx, true)
         try {
-            const draft = await ctx.reply('Thinking...')
-            draftMessageId = draft.message_id
-            const finalText = await runAgent(ctx.chat.id, ctx.message.text, async (partialText) => {
-                if (!draftMessageId) {
-                    return
-                }
-                const now = Date.now()
-                if (partialText === lastSentText || now - lastUpdateMs < 700) {
-                    return
-                }
-                await safeEditMessage(bot, ctx.chat.id, draftMessageId, partialText, true)
-                lastSentText = partialText
-                lastUpdateMs = now
-            })
-            if (draftMessageId) {
-                await safeEditMessage(bot, ctx.chat.id, draftMessageId, finalText, true)
-            } else {
-                await ctx.reply(finalText, { parse_mode: 'MarkdownV2' })
-            }
+            const finalText = await runAgent(ctx.chat.id, ctx.message.text)
+            await ctx.reply(finalText, { parse_mode: 'MarkdownV2' })
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unknown error'
-            const visibleError = `Agent error: ${message}`
-            if (draftMessageId) {
-                await safeEditMessage(bot, ctx.chat.id, draftMessageId, visibleError)
-            } else {
-                await ctx.reply(visibleError)
-            }
-            console.error('Agent execution failed:', error)
+            const visibleError = `Agent Error: ${error instanceof Error ? error.message : 'Unknown'}`
+            console.error(visibleError)
+            await ctx.reply(visibleError)
         } finally {
             clearInterval(typingLoop)
+            await setProcessingReaction(ctx, false)
         }
     })
 
@@ -207,6 +184,17 @@ const startTypingLoop = (ctx: Context): NodeJS.Timeout => {
     return setInterval(() => {
         void ctx.replyWithChatAction('typing')
     }, 4000)
+}
+
+const setProcessingReaction = async (ctx: Context, active: boolean): Promise<void> => {
+    if (!ctx.chat?.id || !ctx.message?.message_id) {
+        return
+    }
+    try {
+        await ctx.api.setMessageReaction(ctx.chat.id, ctx.message.message_id, active ? [{ type: 'emoji', emoji: '👀' }] : [])
+    } catch (error) {
+        console.warn('Could not update processing reaction:', error)
+    }
 }
 
 const parseAllowedChatIds = (value: string | undefined): Set<string> => {
@@ -272,18 +260,6 @@ const cronHelpText = [
     '  0 9 * * 1     — every Monday at 9am',
     '  */30 * * * *  — every 30 minutes'
 ].join('\n')
-
-const safeEditMessage = async (bot: Bot, chatId: number, messageId: number, text: string, html = false): Promise<void> => {
-    const trimmedText = text.trim()
-    if (!trimmedText) return
-    try {
-        await bot.api.editMessageText(chatId, messageId, trimmedText, html ? { parse_mode: 'MarkdownV2' } : undefined)
-    } catch (error) {
-        const err = error as { description?: string }
-        if (typeof err.description === 'string' && err.description.includes('message is not modified')) return
-        throw error
-    }
-}
 
 const parseRunArgs = (input: string): { agent: AgentName; task: string; workdir: string } | null => {
     const trimmed = input.trim()
