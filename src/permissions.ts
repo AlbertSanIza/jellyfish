@@ -18,9 +18,17 @@ interface PendingRequest {
     timer: ReturnType<typeof setTimeout>
     chatId: number
     messageId: number
+    toolName: string
 }
 
 const pendingRequests = new Map<string, PendingRequest>()
+
+// Per-chat set of tools the user chose "Always Allow" for (persists until /new or bot restart)
+const alwaysAllowedByChat = new Map<number, Set<string>>()
+
+export const clearAlwaysAllowed = (chatId: number): void => {
+    alwaysAllowedByChat.delete(chatId)
+}
 
 const summarizeInput = (toolName: string, input: Record<string, unknown>): string => {
     if (toolName === 'Bash' && typeof input['command'] === 'string') {
@@ -42,10 +50,19 @@ export const createCanUseTool = (botApi: Api, chatId: number): CanUseTool => {
             return { behavior: 'allow' }
         }
 
+        // Check if user previously chose "Always Allow" for this tool
+        const chatAllowed = alwaysAllowedByChat.get(chatId)
+        if (chatAllowed?.has(toolName)) {
+            return { behavior: 'allow' }
+        }
+
         const requestId = `perm:${options.toolUseID}`
         const summary = summarizeInput(toolName, input)
 
-        const keyboard = new InlineKeyboard().text('✅ Allow', `${requestId}:allow`).text('❌ Deny', `${requestId}:deny`)
+        const keyboard = new InlineKeyboard()
+            .text('✅ Allow', `${requestId}:allow`)
+            .text('✅ Always Allow', `${requestId}:always`)
+            .text('❌ Deny', `${requestId}:deny`)
 
         const text = `🔐 Permission Request\nTool: ${toolName}\n${summary}`
 
@@ -62,7 +79,8 @@ export const createCanUseTool = (botApi: Api, chatId: number): CanUseTool => {
                 resolve,
                 timer,
                 chatId,
-                messageId: sent.message_id
+                messageId: sent.message_id,
+                toolName
             })
         })
     }
@@ -85,8 +103,17 @@ export const handlePermissionCallback = async (botApi: Api, callbackQuery: Callb
     clearTimeout(pending.timer)
     pendingRequests.delete(requestId)
 
-    const allowed = decision === 'allow'
-    const label = allowed ? '✅ Allowed' : '❌ Denied'
+    const allowed = decision === 'allow' || decision === 'always'
+    const label = allowed ? (decision === 'always' ? '✅ Always Allowed' : '✅ Allowed') : '❌ Denied'
+
+    if (decision === 'always') {
+        let chatSet = alwaysAllowedByChat.get(pending.chatId)
+        if (!chatSet) {
+            chatSet = new Set()
+            alwaysAllowedByChat.set(pending.chatId, chatSet)
+        }
+        chatSet.add(pending.toolName)
+    }
 
     await botApi.editMessageText(pending.chatId, pending.messageId, `${callbackQuery.message?.text ?? 'Permission Request'}\n\n${label}`).catch(() => {})
     await botApi.answerCallbackQuery(callbackQuery.id, { text: label }).catch(() => {})
