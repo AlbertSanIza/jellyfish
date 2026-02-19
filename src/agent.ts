@@ -1,5 +1,5 @@
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
-import { lstat, mkdir, readFile, readdir, readlink, symlink } from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import telegramifyMarkdown from 'telegramify-markdown'
@@ -10,6 +10,7 @@ import { createJellyfishMcpServer } from './tools'
 type OnChunk = (partialText: string) => Promise<void> | void
 
 const BUILTIN_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch']
+const SKILL_TOOL = 'Skill'
 
 const nowIso = (): string => new Date().toISOString()
 
@@ -120,7 +121,7 @@ const parseSkillNameFromMarkdown = (content: string): string | undefined => {
 }
 
 const discoverProjectSkills = async (): Promise<ProjectSkill[]> => {
-    const projectSkillsDir = path.join(process.cwd(), 'skills')
+    const projectSkillsDir = path.join(process.cwd(), '.claude', 'skills')
     try {
         const entries = await readdir(projectSkillsDir, { withFileTypes: true })
         const skills: ProjectSkill[] = []
@@ -143,8 +144,7 @@ const discoverProjectSkills = async (): Promise<ProjectSkill[]> => {
 }
 
 const logSkillDiagnostics = async (): Promise<void> => {
-    const projectSkillsDir = path.join(process.cwd(), 'skills')
-    const claudeSkillsDir = path.join(process.cwd(), '.claude', 'skills')
+    const projectSkillsDir = path.join(process.cwd(), '.claude', 'skills')
 
     try {
         const projectSkillsStat = await lstat(projectSkillsDir)
@@ -152,18 +152,6 @@ const logSkillDiagnostics = async (): Promise<void> => {
     } catch {
         console.log(`[agent] skills dir missing: ${projectSkillsDir}`)
         return
-    }
-
-    try {
-        const claudeSkillsStat = await lstat(claudeSkillsDir)
-        if (claudeSkillsStat.isSymbolicLink()) {
-            const target = await readlink(claudeSkillsDir)
-            console.log(`[agent] .claude/skills symlink -> ${target}`)
-        } else {
-            console.log('[agent] .claude/skills exists but is not a symlink')
-        }
-    } catch {
-        console.log('[agent] .claude/skills missing')
     }
 
     try {
@@ -189,31 +177,6 @@ const logSkillDiagnostics = async (): Promise<void> => {
     }
 }
 
-const ensureProjectSkillsBridge = async (): Promise<void> => {
-    const projectSkillsDir = path.join(process.cwd(), 'skills')
-    const claudeProjectDir = path.join(process.cwd(), '.claude')
-    const claudeSkillsDir = path.join(claudeProjectDir, 'skills')
-
-    try {
-        const srcStat = await lstat(projectSkillsDir)
-        if (!srcStat.isDirectory()) return
-    } catch {
-        return
-    }
-
-    try {
-        const existing = await lstat(claudeSkillsDir)
-        if (existing.isDirectory() || existing.isSymbolicLink()) return
-    } catch {
-        await mkdir(claudeProjectDir, { recursive: true })
-        try {
-            await symlink(projectSkillsDir, claudeSkillsDir, 'dir')
-        } catch (error) {
-            console.warn('[agent] could not create .claude/skills symlink:', error)
-        }
-    }
-}
-
 const prepareClaudeRuntimeEnv = async (): Promise<void> => {
     if (process.env.DEBUG_CLAUDE_AGENT_SDK) {
         console.warn('[agent] DEBUG_CLAUDE_AGENT_SDK is enabled; disabling for bot runtime')
@@ -229,7 +192,6 @@ const prepareClaudeRuntimeEnv = async (): Promise<void> => {
         // Ignore debug dir setup failures; SDK can still run without this override.
     }
 
-    await ensureProjectSkillsBridge()
     await logSkillDiagnostics()
 }
 
@@ -243,6 +205,7 @@ const executeQueryAttempt = async (
     let capturedSessionId = options.resumeSessionId
     let accumulatedText = ''
     let finalResult: string | undefined
+    const allowedTools = options.includeBuiltinTools ? [SKILL_TOOL, ...BUILTIN_TOOLS] : [SKILL_TOOL]
 
     const lowerMessage = messageText.toLowerCase()
     const relevantSkills = availableSkills.filter((skill) => lowerMessage.includes(skill.name.toLowerCase()))
@@ -256,6 +219,7 @@ const executeQueryAttempt = async (
         options: {
             systemPrompt: buildSystemPrompt(availableSkills),
             tools: options.includeBuiltinTools ? BUILTIN_TOOLS : [],
+            allowedTools,
             ...(options.bypassPermissions ? { permissionMode: 'bypassPermissions' as const, allowDangerouslySkipPermissions: true } : {}),
             includePartialMessages: options.includePartialMessages,
             cwd: process.cwd(),
@@ -268,7 +232,7 @@ const executeQueryAttempt = async (
                   }
                 : {}),
             ...(options.model ? { model: options.model } : {}),
-            settingSources: ['user', 'project', 'local'],
+            settingSources: ['user', 'project'],
             ...(options.resumeSessionId ? { resume: options.resumeSessionId } : {})
         }
     })
