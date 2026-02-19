@@ -1,6 +1,6 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { customMemoryTools } from "./tools.js";
-import { loadSession, saveSession, type SessionMessage } from "./session.js";
+import { customMemoryTools } from "./tools";
+import { loadSession, saveSession, type SessionMessage } from "./session";
 
 type OnChunk = (partialText: string) => Promise<void> | void;
 

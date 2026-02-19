@@ -1,5 +1,7 @@
 # jellyfish-ai
 
+Requires Bun 1.0+.
+
 Personal Telegram AI bot built with `grammy` and the Claude Agent SDK.
 
 ## Features
@@ -13,6 +15,9 @@ Personal Telegram AI bot built with `grammy` and the Claude Agent SDK.
 - Commands:
   - `/new` clears chat session
   - `/status` shows stored message count
+  - `/cron list` lists cron jobs for the current chat
+  - `/cron add <schedule> <prompt>` adds a cron job
+  - `/cron remove <id>` removes a cron job
 
 ## Project Structure
 
@@ -23,6 +28,7 @@ jellyfish-ai/
 │   ├── bot.ts
 │   ├── agent.ts
 │   ├── session.ts
+│   ├── cron.ts
 │   └── tools.ts
 ├── .env.example
 ├── .gitignore
@@ -36,7 +42,7 @@ jellyfish-ai/
 1. Install dependencies:
 
 ```bash
-npm install
+bun install
 ```
 
 2. Copy env file and fill values:
@@ -44,6 +50,8 @@ npm install
 ```bash
 cp .env.example .env
 ```
+
+Bun loads `.env` automatically.
 
 3. Configure authentication (choose one):
 
@@ -67,19 +75,53 @@ Set `ANTHROPIC_API_KEY` in your `.env` file.
 5. Run in development:
 
 ```bash
-npm run dev
+bun dev
 ```
 
-6. Build:
+6. Run normally:
 
 ```bash
-npm run build
+bun start
 ```
 
-7. Run production build:
+## Running as a Daemon (pm2)
+
+Start as a background daemon directly from TypeScript with Bun (no build step):
 
 ```bash
-npm run start
+bun run daemon:start
+```
+
+Other commands:
+- `bun run daemon:stop`     - stop the daemon
+- `bun run daemon:restart`  - restart after code changes
+- `bun run daemon:status`   - check if running
+- `bun run daemon:logs`     - tail logs
+- `bun run daemon:save`     - persist across reboots (run once after start)
+
+To auto-start on login (macOS):
+
+```bash
+pm2 startup
+bun run daemon:save
+```
+
+## Cron Jobs
+
+Cron jobs are managed from Telegram with `/cron` commands and persisted at `~/.jellyfish/crons.json`.
+
+Examples:
+
+```text
+/cron list
+/cron add "0 9 * * *" Give me a morning weather summary
+/cron remove <id>
+```
+
+For local development/testing cron execution, run the bot with:
+
+```bash
+bun dev
 ```
 
 ## Notes

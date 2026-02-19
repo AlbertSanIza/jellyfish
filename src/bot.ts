@@ -1,6 +1,7 @@
 import { Bot, Context } from "grammy";
-import { runAgent } from "./agent.js";
-import { clearSession, loadSession } from "./session.js";
+import { runAgent } from "./agent";
+import { addCron, loadCrons, removeCron } from "./cron";
+import { clearSession, loadSession } from "./session";
 
 const parseAllowedChatIds = (value: string | undefined): Set<string> => {
   if (!value) {
@@ -16,6 +17,59 @@ const parseAllowedChatIds = (value: string | undefined): Set<string> => {
 
 const isAllowedChat = (chatId: string, allowlist: Set<string>): boolean =>
   allowlist.has(chatId);
+
+const parseCronAddArgs = (
+  input: string,
+): { schedule: string; prompt: string } | null => {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
+    const quote = trimmed[0];
+    const closingIdx = trimmed.indexOf(quote, 1);
+    if (closingIdx <= 1) {
+      return null;
+    }
+    const schedule = trimmed.slice(1, closingIdx).trim();
+    const prompt = trimmed.slice(closingIdx + 1).trim();
+    if (!schedule || !prompt) {
+      return null;
+    }
+    return { schedule, prompt };
+  }
+
+  const parts = trimmed.split(/\s+/);
+  for (const cronFieldCount of [5, 6]) {
+    if (parts.length <= cronFieldCount) {
+      continue;
+    }
+    const schedule = parts.slice(0, cronFieldCount).join(" ");
+    const prompt = parts.slice(cronFieldCount).join(" ").trim();
+    if (!prompt) {
+      continue;
+    }
+    return { schedule, prompt };
+  }
+
+  return null;
+};
+
+const cronHelpText = [
+  "🕐 Cron commands:",
+  "",
+  "/cron list — list your cron jobs",
+  "/cron add <schedule> <prompt> — create a new cron job",
+  '  Example: /cron add "0 9 * * *" Give me a morning weather summary',
+  "/cron remove <id> — delete a cron job",
+  "",
+  "Schedule format: standard cron (minute hour day month weekday)",
+  "Examples:",
+  "  0 9 * * *     — every day at 9am",
+  "  0 9 * * 1     — every Monday at 9am",
+  "  */30 * * * *  — every 30 minutes",
+].join("\n");
 
 const safeEditMessage = async (
   bot: Bot,
@@ -74,6 +128,85 @@ export const createBot = (): Bot => {
 
     const messages = await loadSession(chatId);
     await ctx.reply(`Session has ${messages.length} messages.`);
+  });
+
+  bot.command("cron", async (ctx) => {
+    const chatId = String(ctx.chat?.id ?? "");
+    if (!chatId) {
+      return;
+    }
+    if (!isAllowedChat(chatId, allowedChats)) {
+      await ctx.reply("Access denied.");
+      return;
+    }
+
+    const args = ctx.match.trim();
+    if (!args || args === "help") {
+      await ctx.reply(cronHelpText);
+      return;
+    }
+
+    if (args === "list") {
+      const allJobs = await loadCrons();
+      const chatJobs = allJobs.filter((job) => job.chatId === chatId);
+      if (chatJobs.length === 0) {
+        await ctx.reply("No cron jobs set. Use /cron add <schedule> <prompt> to create one.");
+        return;
+      }
+
+      const lines = ["🕐 Active cron jobs:", ""];
+      for (const [index, job] of chatJobs.entries()) {
+        lines.push(`${index + 1}. ID: ${job.id}`);
+        lines.push(`   Schedule: ${job.schedule}`);
+        lines.push(`   Prompt: ${job.prompt}`);
+        lines.push("");
+      }
+      lines.push("Use /cron remove <id> to delete.");
+      await ctx.reply(lines.join("\n"));
+      return;
+    }
+
+    if (args.startsWith("add ")) {
+      const parsed = parseCronAddArgs(args.slice(4));
+      if (!parsed) {
+        await ctx.reply("Invalid usage. Use /cron add <schedule> <prompt>.");
+        return;
+      }
+      try {
+        const created = await addCron(parsed.schedule, parsed.prompt, chatId);
+        await ctx.reply(
+          `✅ Cron job added! ID: ${created.id} | Schedule: ${created.schedule} | Prompt: ${created.prompt}`,
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message === "Invalid cron expression"
+            ? "Invalid cron expression."
+            : "Failed to add cron job.";
+        await ctx.reply(`❌ ${message}`);
+      }
+      return;
+    }
+
+    if (args.startsWith("remove ")) {
+      const id = args.slice(7).trim();
+      if (!id) {
+        await ctx.reply("Invalid usage. Use /cron remove <id>.");
+        return;
+      }
+
+      const allJobs = await loadCrons();
+      const target = allJobs.find((job) => job.id === id && job.chatId === chatId);
+      if (!target) {
+        await ctx.reply("❌ Not found.");
+        return;
+      }
+
+      const removed = await removeCron(id);
+      await ctx.reply(removed ? "✅ Removed." : "❌ Not found.");
+      return;
+    }
+
+    await ctx.reply(cronHelpText);
   });
 
   bot.on("message:text", async (ctx) => {

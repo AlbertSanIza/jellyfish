@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { mkdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 
@@ -17,7 +17,7 @@ const getSessionPath = (chatId: string): string =>
   path.join(sessionsDir, `${chatId}.json`);
 
 const ensureSessionsDir = async (): Promise<void> => {
-  await fs.mkdir(sessionsDir, { recursive: true });
+  await mkdir(sessionsDir, { recursive: true });
 };
 
 export const loadSession = async (chatId: string): Promise<SessionMessage[]> => {
@@ -25,7 +25,7 @@ export const loadSession = async (chatId: string): Promise<SessionMessage[]> => 
   const sessionPath = getSessionPath(chatId);
 
   try {
-    const raw = await fs.readFile(sessionPath, "utf8");
+    const raw = await Bun.file(sessionPath).text();
     const parsed = JSON.parse(raw) as unknown;
 
     if (!Array.isArray(parsed)) {
@@ -61,14 +61,14 @@ export const saveSession = async (
 ): Promise<void> => {
   await ensureSessionsDir();
   const sessionPath = getSessionPath(chatId);
-  await fs.writeFile(sessionPath, JSON.stringify(messages, null, 2), "utf8");
+  await Bun.write(sessionPath, JSON.stringify(messages, null, 2));
 };
 
 export const clearSession = async (chatId: string): Promise<void> => {
   await ensureSessionsDir();
   const sessionPath = getSessionPath(chatId);
   try {
-    await fs.unlink(sessionPath);
+    await unlink(sessionPath);
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
     if (err.code !== "ENOENT") {
