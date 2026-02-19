@@ -1,5 +1,5 @@
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
-import { mkdir } from 'node:fs/promises'
+import { lstat, mkdir, symlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import telegramifyMarkdown from 'telegramify-markdown'
@@ -90,6 +90,31 @@ const getErrorSummary = (error: unknown): string => {
     return message.replace(/\s+/g, ' ').trim().slice(0, 220)
 }
 
+const ensureProjectSkillsBridge = async (): Promise<void> => {
+    const projectSkillsDir = path.join(process.cwd(), 'skills')
+    const claudeProjectDir = path.join(process.cwd(), '.claude')
+    const claudeSkillsDir = path.join(claudeProjectDir, 'skills')
+
+    try {
+        const srcStat = await lstat(projectSkillsDir)
+        if (!srcStat.isDirectory()) return
+    } catch {
+        return
+    }
+
+    try {
+        const existing = await lstat(claudeSkillsDir)
+        if (existing.isDirectory() || existing.isSymbolicLink()) return
+    } catch {
+        await mkdir(claudeProjectDir, { recursive: true })
+        try {
+            await symlink(projectSkillsDir, claudeSkillsDir, 'dir')
+        } catch (error) {
+            console.warn('[agent] could not create .claude/skills symlink:', error)
+        }
+    }
+}
+
 const prepareClaudeRuntimeEnv = async (): Promise<void> => {
     if (process.env.DEBUG_CLAUDE_AGENT_SDK) {
         console.warn('[agent] DEBUG_CLAUDE_AGENT_SDK is enabled; disabling for bot runtime')
@@ -104,6 +129,8 @@ const prepareClaudeRuntimeEnv = async (): Promise<void> => {
     } catch {
         // Ignore debug dir setup failures; SDK can still run without this override.
     }
+
+    await ensureProjectSkillsBridge()
 }
 
 const executeQueryAttempt = async (
@@ -133,6 +160,7 @@ const executeQueryAttempt = async (
                   }
                 : {}),
             ...(options.model ? { model: options.model } : {}),
+            settingSources: ['user', 'project', 'local'],
             ...(options.resumeSessionId ? { resume: options.resumeSessionId } : {})
         }
     })
