@@ -160,7 +160,6 @@ export const createBot = (): Bot => {
 
     bot.on('message:text', async (ctx) => {
         const typingLoop = startTypingLoop(ctx)
-        await ctx.replyWithChatAction('typing')
         let draftMessageId: number | undefined
         let lastSentText = ''
         let lastUpdateMs = 0
@@ -200,6 +199,7 @@ export const createBot = (): Bot => {
 }
 
 const startTypingLoop = (ctx: Context): NodeJS.Timeout => {
+    void ctx.replyWithChatAction('typing')
     return setInterval(() => {
         void ctx.replyWithChatAction('typing')
     }, 4000)
