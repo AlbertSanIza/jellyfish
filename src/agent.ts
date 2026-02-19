@@ -1,8 +1,8 @@
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import os from 'node:os'
-import { markdownToHtml } from './format'
-import { memoryMcpServer } from './tools'
+import telegramifyMarkdown from 'telegramify-markdown'
 import { loadSession, saveSession, type SessionData, type SessionMessage } from './session'
+import { memoryMcpServer } from './tools'
 
 type OnChunk = (partialText: string) => Promise<void> | void
 
@@ -108,7 +108,7 @@ export const runAgent = async (chatId: string, messageText: string, onChunk?: On
             const delta = extractTextDelta(event)
             if (delta) {
                 accumulatedText += delta
-                if (onChunk) await onChunk(markdownToHtml(accumulatedText))
+                if (onChunk) await onChunk(telegramifyMarkdown(accumulatedText, 'escape'))
             }
 
             const result = extractFinalText(event)
@@ -133,7 +133,7 @@ export const runAgent = async (chatId: string, messageText: string, onChunk?: On
         }
         await saveSession(chatId, updatedData)
 
-        return markdownToHtml(rawText)
+        return telegramifyMarkdown(rawText, 'escape')
     } catch (error) {
         console.error('[agent] error:', error)
         await saveSession(chatId, { sdkSessionId: capturedSessionId, messages: [...session.messages, userMessage] })

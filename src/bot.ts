@@ -73,7 +73,7 @@ const safeEditMessage = async (bot: Bot, chatId: number, messageId: number, text
     const trimmedText = text.trim()
     if (!trimmedText) return
     try {
-        await bot.api.editMessageText(chatId, messageId, trimmedText, html ? { parse_mode: 'HTML' } : undefined)
+        await bot.api.editMessageText(chatId, messageId, trimmedText, html ? { parse_mode: 'MarkdownV2' } : undefined)
     } catch (error) {
         const err = error as { description?: string }
         if (typeof err.description === 'string' && err.description.includes('message is not modified')) return
@@ -334,7 +334,7 @@ export const createBot = (): Bot => {
             if (draftMessageId) {
                 await safeEditMessage(bot, chatIdNumber, draftMessageId, finalText, true)
             } else {
-                await ctx.reply(finalText, { parse_mode: 'HTML' })
+                await ctx.reply(finalText, { parse_mode: 'MarkdownV2' })
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error'
