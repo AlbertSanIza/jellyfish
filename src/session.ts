@@ -18,7 +18,7 @@ export interface SessionData {
 const baseDir = path.join(os.homedir(), '.jellyfish')
 const sessionsDir = path.join(baseDir, 'sessions')
 
-const getSessionPath = (chatId: string): string => path.join(sessionsDir, `${chatId}.json`)
+const getSessionPath = (chatId: number): string => path.join(sessionsDir, `${chatId}.json`)
 
 const ensureSessionsDir = async (): Promise<void> => {
     await mkdir(sessionsDir, { recursive: true })
@@ -30,7 +30,7 @@ const isSessionMessage = (item: unknown): item is SessionMessage => {
     return (c.role === 'system' || c.role === 'user' || c.role === 'assistant') && typeof c.content === 'string' && typeof c.timestamp === 'string'
 }
 
-export const loadSession = async (chatId: string): Promise<SessionData> => {
+export const loadSession = async (chatId: number): Promise<SessionData> => {
     await ensureSessionsDir()
     const sessionPath = getSessionPath(chatId)
     try {
@@ -56,13 +56,13 @@ export const loadSession = async (chatId: string): Promise<SessionData> => {
     }
 }
 
-export const saveSession = async (chatId: string, data: SessionData): Promise<void> => {
+export const saveSession = async (chatId: number, data: SessionData): Promise<void> => {
     await ensureSessionsDir()
     const sessionPath = getSessionPath(chatId)
     await Bun.write(sessionPath, JSON.stringify(data, null, 2))
 }
 
-export const clearSession = async (chatId: string): Promise<void> => {
+export const clearSession = async (chatId: number): Promise<void> => {
     await ensureSessionsDir()
     const sessionPath = getSessionPath(chatId)
     try {
