@@ -159,8 +159,6 @@ export const createBot = (): Bot => {
     })
 
     bot.on('message:text', async (ctx) => {
-        const chatId = ctx.chat.id
-        const text = ctx.message.text
         const typingLoop = startTypingLoop(ctx)
         await ctx.replyWithChatAction('typing')
         let draftMessageId: number | undefined
@@ -169,7 +167,7 @@ export const createBot = (): Bot => {
         try {
             const draft = await ctx.reply('Thinking...')
             draftMessageId = draft.message_id
-            const finalText = await runAgent(chatId, text, async (partialText) => {
+            const finalText = await runAgent(ctx.chat.id, ctx.message.text, async (partialText) => {
                 if (!draftMessageId) return
                 const now = Date.now()
                 if (partialText === lastSentText || now - lastUpdateMs < 700) return
