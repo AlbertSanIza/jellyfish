@@ -159,8 +159,7 @@ export const createBot = (): Bot => {
     })
 
     bot.on('message:text', async (ctx) => {
-        const chatIdNumber = ctx.chat.id
-        const chatId = String(chatIdNumber)
+        const chatId = String(ctx.chat.id)
         const text = ctx.message.text
         const typingLoop = startTypingLoop(ctx)
         await ctx.replyWithChatAction('typing')
@@ -174,12 +173,12 @@ export const createBot = (): Bot => {
                 if (!draftMessageId) return
                 const now = Date.now()
                 if (partialText === lastSentText || now - lastUpdateMs < 700) return
-                await safeEditMessage(bot, chatIdNumber, draftMessageId, partialText, true)
+                await safeEditMessage(bot, ctx.chat.id, draftMessageId, partialText, true)
                 lastSentText = partialText
                 lastUpdateMs = now
             })
             if (draftMessageId) {
-                await safeEditMessage(bot, chatIdNumber, draftMessageId, finalText, true)
+                await safeEditMessage(bot, ctx.chat.id, draftMessageId, finalText, true)
             } else {
                 await ctx.reply(finalText, { parse_mode: 'MarkdownV2' })
             }
@@ -187,7 +186,7 @@ export const createBot = (): Bot => {
             const message = error instanceof Error ? error.message : 'Unknown error'
             const visibleError = `Agent error: ${message}`
             if (draftMessageId) {
-                await safeEditMessage(bot, chatIdNumber, draftMessageId, visibleError)
+                await safeEditMessage(bot, ctx.chat.id, draftMessageId, visibleError)
             } else {
                 await ctx.reply(visibleError)
             }
