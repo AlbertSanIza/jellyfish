@@ -22,12 +22,12 @@ export const createBot = (): Bot => {
     bot.use(accessControlMiddleware(allowedChats))
 
     bot.command('new', async (ctx) => {
-        await clearSession(String(ctx.chat!.id))
+        await clearSession(ctx.chat!.id)
         await ctx.reply('Session cleared! Fresh start 🪼')
     })
 
     bot.command('status', async (ctx) => {
-        const session = await loadSession(String(ctx.chat!.id))
+        const session = await loadSession(ctx.chat!.id)
         await ctx.reply(`Session has ${session.messages.length} messages.`)
     })
 
@@ -159,7 +159,7 @@ export const createBot = (): Bot => {
     })
 
     bot.on('message:text', async (ctx) => {
-        const chatId = String(ctx.chat.id)
+        const chatId = ctx.chat.id
         const text = ctx.message.text
         const typingLoop = startTypingLoop(ctx)
         await ctx.replyWithChatAction('typing')

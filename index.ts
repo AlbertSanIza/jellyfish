@@ -6,7 +6,7 @@ const bot = createBot()
 
 startCronScheduler(async (job) => {
     try {
-        const result = await runAgent(job.chatId, job.prompt)
+        const result = await runAgent(Number(job.chatId), job.prompt)
         await bot.api.sendMessage(Number(job.chatId), result)
     } catch (err) {
         console.error('Cron job failed:', job.id, err)

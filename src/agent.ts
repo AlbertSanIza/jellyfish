@@ -60,7 +60,7 @@ const getModel = (): string | undefined => {
     return MODEL_ALIASES[modelEnv.toLowerCase()] ?? modelEnv
 }
 
-export const runAgent = async (chatId: string, messageText: string, onChunk?: OnChunk): Promise<string> => {
+export const runAgent = async (chatId: number, messageText: string, onChunk?: OnChunk): Promise<string> => {
     console.log(`[agent] chatId: ${chatId} | message: "${messageText.slice(0, 80)}"`)
 
     const session = await loadSession(chatId)
