@@ -1,6 +1,8 @@
 import { Bot, Context } from 'grammy'
+import { homedir } from 'node:os'
 import { runAgent } from './agent'
 import { addCron, loadCrons, removeCron } from './cron'
+import { killJob, listJobs, loadJobs, spawnJob, type AgentName } from './jobs'
 import { clearSession, loadSession } from './session'
 
 const parseAllowedChatIds = (value: string | undefined): Set<string> => {
@@ -87,6 +89,71 @@ const startTypingLoop = (ctx: Context): NodeJS.Timeout =>
     setInterval(() => {
         void ctx.replyWithChatAction('typing')
     }, 4000)
+
+const parseRunArgs = (input: string): { agent: AgentName; task: string; workdir: string } | null => {
+    const trimmed = input.trim()
+    if (!trimmed) {
+        return null
+    }
+
+    const [agentToken, ...restParts] = trimmed.split(/\s+/)
+    if (!agentToken) {
+        return null
+    }
+    if (agentToken !== 'codex' && agentToken !== 'opencode' && agentToken !== 'claude') {
+        return null
+    }
+
+    const rest = restParts.join(' ').trim()
+    const workdirRegex = /(?:^|\s)--workdir\s+("[^"]+"|'[^']+'|\S+)/g
+    let workdir = Bun.env.HOME ?? process.env.HOME ?? homedir()
+    let taskText = rest
+
+    const matches = [...rest.matchAll(workdirRegex)]
+    if (matches.length > 0) {
+        const last = matches[matches.length - 1]
+        const full = last?.[0] ?? ''
+        const captured = last?.[1] ?? ''
+        const normalized = captured.replace(/^['"]|['"]$/g, '').trim()
+        if (normalized) {
+            workdir = normalized
+        }
+        taskText = taskText.replace(full, ' ').replace(/\s+/g, ' ').trim()
+    }
+
+    if (!taskText) {
+        return null
+    }
+    return { agent: agentToken, task: taskText, workdir }
+}
+
+const relativeTimeFormat = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+
+const formatRelativeTime = (dateIso: string): string => {
+    const timestamp = Date.parse(dateIso)
+    if (Number.isNaN(timestamp)) {
+        return dateIso
+    }
+    const diffMs = timestamp - Date.now()
+    const diffSeconds = Math.round(diffMs / 1000)
+
+    if (Math.abs(diffSeconds) < 60) {
+        return relativeTimeFormat.format(diffSeconds, 'second')
+    }
+
+    const diffMinutes = Math.round(diffSeconds / 60)
+    if (Math.abs(diffMinutes) < 60) {
+        return relativeTimeFormat.format(diffMinutes, 'minute')
+    }
+
+    const diffHours = Math.round(diffMinutes / 60)
+    if (Math.abs(diffHours) < 24) {
+        return relativeTimeFormat.format(diffHours, 'hour')
+    }
+
+    const diffDays = Math.round(diffHours / 24)
+    return relativeTimeFormat.format(diffDays, 'day')
+}
 
 const runCommand = async (cmd: string[], cwd: string): Promise<string> => {
     const proc = Bun.spawn(cmd, { cwd, stdout: 'pipe', stderr: 'pipe' })
@@ -232,6 +299,99 @@ export const createBot = (): Bot => {
         }
 
         await ctx.reply(cronHelpText)
+    })
+
+    bot.command('run', async (ctx) => {
+        const chatId = String(ctx.chat?.id ?? '')
+        if (!chatId) {
+            return
+        }
+        if (!isAllowedChat(chatId, allowedChats)) {
+            await ctx.reply('Access denied.')
+            return
+        }
+
+        const parsed = parseRunArgs(ctx.match)
+        if (!parsed) {
+            await ctx.reply('Usage: /run <codex|opencode|claude> [--workdir /path] <task>')
+            return
+        }
+
+        const job = await spawnJob(parsed.agent, parsed.task, parsed.workdir, chatId, async (completedJob) => {
+            const shortId = completedJob.id.slice(0, 8)
+            const output = completedJob.output.slice(-2000) || '(no output)'
+            const statusLabel = completedJob.status === 'done' ? 'Done' : 'Failed'
+            const text = `${statusLabel}: ${completedJob.agent} [${shortId}]\nTask: ${completedJob.task}\n\nOutput:\n${output}`
+            await bot.api.sendMessage(Number(completedJob.chatId), text)
+        })
+
+        const shortId = job.id.slice(0, 8)
+        await ctx.reply(
+            `Started ${job.agent} job [${shortId}]\nTask: ${job.task}\nWorkdir: ${job.workdir}\n\nI will notify you when it finishes. Use /jobs to check or /kill ${shortId} to stop.`
+        )
+    })
+
+    bot.command('jobs', async (ctx) => {
+        const chatId = String(ctx.chat?.id ?? '')
+        if (!chatId) {
+            return
+        }
+        if (!isAllowedChat(chatId, allowedChats)) {
+            await ctx.reply('Access denied.')
+            return
+        }
+
+        const jobs = await listJobs(chatId)
+        if (jobs.length === 0) {
+            await ctx.reply('No jobs yet. Use /run <codex|opencode|claude> <task>.')
+            return
+        }
+
+        const emojiByStatus = {
+            running: '⏳',
+            done: '✅',
+            failed: '❌',
+            killed: '🛑'
+        } as const
+
+        const lines = jobs.map(
+            (job) =>
+                `[${job.id.slice(0, 8)}] ${job.agent} — ${emojiByStatus[job.status]}\n   Task: ${job.task}\n   Started: ${formatRelativeTime(job.startedAt)}`
+        )
+
+        await ctx.reply(lines.join('\n\n'))
+    })
+
+    bot.command('kill', async (ctx) => {
+        const chatId = String(ctx.chat?.id ?? '')
+        if (!chatId) {
+            return
+        }
+        if (!isAllowedChat(chatId, allowedChats)) {
+            await ctx.reply('Access denied.')
+            return
+        }
+
+        const idPrefix = ctx.match.trim()
+        if (!idPrefix) {
+            await ctx.reply('Usage: /kill <job-id-prefix>')
+            return
+        }
+
+        const jobs = await loadJobs()
+        const target = jobs.find((job) => job.chatId === chatId && job.id.startsWith(idPrefix))
+        if (!target) {
+            await ctx.reply('Job not found.')
+            return
+        }
+
+        const killed = await killJob(target.id)
+        if (!killed) {
+            await ctx.reply('Job not found.')
+            return
+        }
+
+        await ctx.reply(`Killed job [${killed.id.slice(0, 8)}].`)
     })
 
     bot.on('message:text', async (ctx) => {
