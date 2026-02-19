@@ -139,12 +139,11 @@ const runCommand = async (cmd: string[], cwd: string): Promise<string> => {
 
 export const createBot = (): Bot => {
     const token = process.env.BOT_TOKEN
-    if (!token) throw new Error('Missing BOT_TOKEN')
-
+    if (!token) {
+        throw new Error('Missing BOT_TOKEN')
+    }
     const allowedChats = parseAllowedChatIds(process.env.ALLOWED_CHAT_IDS)
     const bot = new Bot(token)
-
-    // Register commands with Telegram so they appear in the menu
     void bot.api.setMyCommands([
         { command: 'new', description: 'Clear session and start fresh' },
         { command: 'status', description: 'Check session status' },
@@ -154,19 +153,15 @@ export const createBot = (): Bot => {
         { command: 'jobs', description: 'List running jobs' },
         { command: 'kill', description: 'Kill a job by ID' }
     ])
-
-    // Global access control — all commands and messages are gated here
     bot.use(accessControlMiddleware(allowedChats))
 
     bot.command('new', async (ctx) => {
-        const chatId = String(ctx.chat!.id)
-        await clearSession(chatId)
+        await clearSession(String(ctx.chat!.id))
         await ctx.reply('Session cleared! Fresh start 🪼')
     })
 
     bot.command('status', async (ctx) => {
-        const chatId = String(ctx.chat!.id)
-        const session = await loadSession(chatId)
+        const session = await loadSession(String(ctx.chat!.id))
         await ctx.reply(`Session has ${session.messages.length} messages.`)
     })
 
@@ -189,12 +184,10 @@ export const createBot = (): Bot => {
     bot.command('cron', async (ctx) => {
         const chatId = String(ctx.chat!.id)
         const args = ctx.match.trim()
-
         if (!args || args === 'help') {
             await ctx.reply(cronHelpText)
             return
         }
-
         if (args === 'list') {
             const allJobs = await loadCrons()
             const chatJobs = allJobs.filter((job) => job.chatId === chatId)
@@ -213,7 +206,6 @@ export const createBot = (): Bot => {
             await ctx.reply(lines.join('\n'))
             return
         }
-
         if (args.startsWith('add ')) {
             const parsed = parseCronAddArgs(args.slice(4))
             if (!parsed) {
@@ -229,7 +221,6 @@ export const createBot = (): Bot => {
             }
             return
         }
-
         if (args.startsWith('remove ')) {
             const id = args.slice(7).trim()
             if (!id) {
@@ -246,7 +237,6 @@ export const createBot = (): Bot => {
             await ctx.reply(removed ? '✅ Removed.' : '❌ Not found.')
             return
         }
-
         await ctx.reply(cronHelpText)
     })
 
@@ -257,7 +247,6 @@ export const createBot = (): Bot => {
             await ctx.reply('Usage: /run <codex|opencode|claude> [--workdir /path] <task>')
             return
         }
-
         const job = await spawnJob(parsed.agent, parsed.task, parsed.workdir, chatId, async (completedJob) => {
             const shortId = completedJob.id.slice(0, 8)
             const output = completedJob.output.slice(-2000) || '(no output)'
@@ -265,7 +254,6 @@ export const createBot = (): Bot => {
             const text = `${statusLabel}: ${completedJob.agent} [${shortId}]\nTask: ${completedJob.task}\n\nOutput:\n${output}`
             await bot.api.sendMessage(Number(completedJob.chatId), text)
         })
-
         const shortId = job.id.slice(0, 8)
         await ctx.reply(
             `🚀 Started ${job.agent} [${shortId}]\nTask: ${job.task}\nWorkdir: ${job.workdir}\n\nI'll notify you when it finishes. Use /jobs to check or /kill ${shortId} to stop.`
@@ -279,7 +267,6 @@ export const createBot = (): Bot => {
             await ctx.reply('No jobs yet. Use /run <codex|opencode|claude> <task>.')
             return
         }
-
         const emojiByStatus = { running: '⏳', done: '✅', failed: '❌', killed: '🛑' } as const
         const lines = jobs.map(
             (job) =>
@@ -295,14 +282,12 @@ export const createBot = (): Bot => {
             await ctx.reply('Usage: /kill <job-id-prefix>')
             return
         }
-
         const jobs = await loadJobs()
         const target = jobs.find((job) => job.chatId === chatId && job.id.startsWith(idPrefix))
         if (!target) {
             await ctx.reply('❌ Job not found.')
             return
         }
-
         const killed = await killJob(target.id)
         await ctx.reply(killed ? `✅ Killed job [${killed.id.slice(0, 8)}].` : '❌ Job not found.')
     })
@@ -311,18 +296,14 @@ export const createBot = (): Bot => {
         const chatIdNumber = ctx.chat.id
         const chatId = String(chatIdNumber)
         const text = ctx.message.text
-
         const typingLoop = startTypingLoop(ctx)
         await ctx.replyWithChatAction('typing')
-
         let draftMessageId: number | undefined
         let lastSentText = ''
         let lastUpdateMs = 0
-
         try {
             const draft = await ctx.reply('Thinking...')
             draftMessageId = draft.message_id
-
             const finalText = await runAgent(chatId, text, async (partialText) => {
                 if (!draftMessageId) return
                 const now = Date.now()
@@ -331,7 +312,6 @@ export const createBot = (): Bot => {
                 lastSentText = partialText
                 lastUpdateMs = now
             })
-
             if (draftMessageId) {
                 await safeEditMessage(bot, chatIdNumber, draftMessageId, finalText, true)
             } else {
@@ -351,9 +331,7 @@ export const createBot = (): Bot => {
         }
     })
 
-    bot.catch((error) => {
-        console.error('Telegram bot error:', error.error)
-    })
+    bot.catch((error) => console.error('Telegram bot error:', error.error))
 
     return bot
 }
