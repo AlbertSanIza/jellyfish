@@ -73,9 +73,9 @@ const cronHelpText = [
     '  */30 * * * *  — every 30 minutes'
 ].join('\n')
 
-const safeEditMessage = async (bot: Bot, chatId: number, messageId: number, text: string): Promise<void> => {
+const safeEditMessage = async (bot: Bot, chatId: number, messageId: number, text: string, html = false): Promise<void> => {
     try {
-        await bot.api.editMessageText(chatId, messageId, text)
+        await bot.api.editMessageText(chatId, messageId, text, html ? { parse_mode: 'HTML' } : undefined)
     } catch (error) {
         const err = error as { description?: string }
         if (typeof err.description === 'string' && err.description.includes('message is not modified')) {
@@ -198,8 +198,8 @@ export const createBot = (): Bot => {
             return
         }
 
-        const messages = await loadSession(chatId)
-        await ctx.reply(`Session has ${messages.length} messages.`)
+        const session = await loadSession(chatId)
+        await ctx.reply(`Session has ${session.messages.length} messages.`)
     })
 
     bot.command('update', async (ctx) => {
@@ -428,15 +428,15 @@ export const createBot = (): Bot => {
                     return
                 }
 
-                await safeEditMessage(bot, chatIdNumber, draftMessageId, partialText)
+                await safeEditMessage(bot, chatIdNumber, draftMessageId, partialText, true)
                 lastSentText = partialText
                 lastUpdateMs = now
             })
 
             if (draftMessageId) {
-                await safeEditMessage(bot, chatIdNumber, draftMessageId, finalText)
+                await safeEditMessage(bot, chatIdNumber, draftMessageId, finalText, true)
             } else {
-                await ctx.reply(finalText)
+                await ctx.reply(finalText, { parse_mode: 'HTML' })
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error'

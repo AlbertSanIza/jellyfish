@@ -1,6 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
+import { markdownToHtml } from './format'
 import { customMemoryTools } from './tools'
-import { loadSession, saveSession, type SessionMessage } from './session'
+import { loadSession, saveSession, type SessionData, type SessionMessage } from './session'
 
 type OnChunk = (partialText: string) => Promise<void> | void
 
@@ -17,10 +18,7 @@ const systemPrompt = (): string => {
     ].join('\n')
 }
 
-const toSdkMessages = (messages: SessionMessage[]): Array<{ role: string; content: string }> =>
-    messages.map((message) => ({ role: message.role, content: message.content }))
-
-const extractText = (event: unknown): string => {
+const extractTextFromEvent = (event: unknown): string => {
     if (typeof event !== 'object' || event === null) return ''
     const e = event as Record<string, unknown>
 
@@ -34,7 +32,7 @@ const extractText = (event: unknown): string => {
         if (typeof delta['text'] === 'string') return delta['text']
     }
 
-    // Assistant message content
+    // Assistant message with content blocks
     if (Array.isArray(e['content'])) {
         return e['content']
             .filter((b: unknown) => typeof b === 'object' && b !== null && (b as Record<string, unknown>)['type'] === 'text')
@@ -45,58 +43,80 @@ const extractText = (event: unknown): string => {
     return ''
 }
 
+const extractSdkSessionId = (event: unknown): string | undefined => {
+    if (typeof event !== 'object' || event === null) return undefined
+    const e = event as Record<string, unknown>
+    // SDK emits { type: "system", subtype: "init", session_id: "..." } as the first event
+    if (e['type'] === 'system' && e['subtype'] === 'init' && typeof e['session_id'] === 'string') {
+        return e['session_id']
+    }
+    return undefined
+}
+
 export const runAgent = async (chatId: string, messageText: string, onChunk?: OnChunk): Promise<string> => {
-    console.log(`[agent] runAgent — chatId: ${chatId}, message: "${messageText.slice(0, 80)}"`)
+    console.log(`[agent] chatId: ${chatId} | message: "${messageText.slice(0, 80)}"`)
 
     const session = await loadSession(chatId)
-    console.log(`[agent] loaded session — ${session.length} messages`)
+    console.log(`[agent] session — ${session.messages.length} messages, sdkSessionId: ${session.sdkSessionId ?? 'none'}`)
 
     const userMessage: SessionMessage = { role: 'user', content: messageText, timestamp: nowIso() }
-    const draftSession = [...session, userMessage]
-    let finalText = ''
+    let capturedSdkSessionId: string | undefined = session.sdkSessionId
+    let rawText = ''
 
     try {
-        console.log('[agent] calling query()...')
-
-        const response = await query({
+        // Build query options — resume existing SDK session if we have one
+        const queryOptions = {
             prompt: messageText,
             systemPrompt: systemPrompt(),
-            messageHistory: toSdkMessages(draftSession),
             tools: [...BUILTIN_TOOLS, ...customMemoryTools] as unknown,
-            permissionMode: 'bypassPermissions',
-            options: { stream: true }
-        } as never)
+            permissionMode: 'bypassPermissions' as const,
+            options: {
+                stream: true,
+                ...(session.sdkSessionId ? { resume: session.sdkSessionId } : {})
+            }
+        }
 
-        console.log('[agent] query() returned, iterating events...')
+        console.log(`[agent] calling query()${session.sdkSessionId ? ` (resuming ${session.sdkSessionId})` : ' (new session)'}`)
 
+        const response = await query(queryOptions as never)
         let eventCount = 0
+
         for await (const event of response as AsyncIterable<unknown>) {
             eventCount++
-            const e = event as Record<string, unknown>
 
-            // Log every event type so we can see what the SDK actually emits
-            console.log(`[agent] event #${eventCount}:`, JSON.stringify(e).slice(0, 200))
+            // Capture SDK session ID from the init event
+            const sid = extractSdkSessionId(event)
+            if (sid) {
+                capturedSdkSessionId = sid
+                console.log(`[agent] captured sdkSessionId: ${sid}`)
+            }
 
-            const chunk = extractText(event)
+            const chunk = extractTextFromEvent(event)
             if (!chunk) continue
 
-            finalText += chunk
-            if (onChunk) await onChunk(finalText)
+            rawText += chunk
+            if (onChunk) await onChunk(markdownToHtml(rawText))
         }
 
-        console.log(`[agent] done — ${eventCount} events, finalText length: ${finalText.length}`)
+        console.log(`[agent] done — ${eventCount} events, response length: ${rawText.length}`)
 
-        if (!finalText.trim()) {
-            console.warn('[agent] finalText is empty — no text extracted from any event')
-            finalText = 'I could not generate a response.'
+        if (!rawText.trim()) {
+            console.warn('[agent] empty response from SDK')
+            return 'I could not generate a response.'
         }
 
-        const assistantMessage: SessionMessage = { role: 'assistant', content: finalText, timestamp: nowIso() }
-        await saveSession(chatId, [...draftSession, assistantMessage])
-        return finalText
+        // Persist session — append both user and assistant messages
+        const updatedData: SessionData = {
+            sdkSessionId: capturedSdkSessionId,
+            messages: [...session.messages, userMessage, { role: 'assistant', content: rawText, timestamp: nowIso() }]
+        }
+        await saveSession(chatId, updatedData)
+
+        return markdownToHtml(rawText)
     } catch (error) {
-        console.error('[agent] query() threw an error:', error)
-        await saveSession(chatId, draftSession)
+        console.error('[agent] error:', error)
+        // Still save the user message so context isn't lost
+        await saveSession(chatId, { sdkSessionId: capturedSdkSessionId, messages: [...session.messages, userMessage] })
         throw error
     }
 }
