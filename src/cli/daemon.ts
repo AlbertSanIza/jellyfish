@@ -1,6 +1,6 @@
 import chalk from 'chalk'
 import { Command } from 'commander'
-import { spawnSync } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -18,10 +18,34 @@ let spinner: Ora
 export const daemonCommand = new Command('daemon').description('Manage the Jellyfish daemon')
 
 daemonCommand.hook('preAction', async (_thisCommand, actionCommand) => {
-    if (actionCommand.name() !== 'run') {
-        spinner = ora({ isEnabled: isatty(1) })
-    }
+    if (actionCommand.name() !== 'run') spinner = ora({ isEnabled: isatty(1) })
 })
+
+daemonCommand
+    .command('install')
+    .description('Install Jellyfish as a LaunchAgent (auto-start on login)')
+    .option('--force', 'Force reinstall even if already installed')
+    .action(async (opts: { force?: boolean }) => {
+        if (existsSync(PLIST_PATH) && !opts.force) {
+            spinner.info(`Jellyfish is already installed. Use ${chalk.blue('--force')} to reinstall`)
+            return
+        }
+        spinner.start('Installing Jellyfish')
+        mkdirSync(PLIST_DIR, { recursive: true })
+        mkdirSync(LOG_DIR, { recursive: true })
+        await launchctl('bootout', GUI_DOMAIN, PLIST_PATH)
+        writeFileSync(PLIST_PATH, buildPlist(process.argv[0]!))
+        await launchctl('enable', `${GUI_DOMAIN}/${LABEL}`)
+        const result = await launchctl('bootstrap', GUI_DOMAIN, PLIST_PATH)
+        if (result.code !== 0) {
+            spinner.fail(`Failed to install Jellyfish LaunchAgent: ${result.stderr}`)
+            process.exit(1)
+        }
+        await launchctl('kickstart', '-k', `${GUI_DOMAIN}/${LABEL}`)
+        spinner.succeed('Jellyfish Installed and Running!')
+        console.log(chalk.dim(`  Plist:  ${PLIST_PATH}`))
+        console.log(chalk.dim(`  Logs:   ${LOG_DIR}/out.log`))
+    })
 
 
 daemonCommand
