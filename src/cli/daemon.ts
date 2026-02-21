@@ -20,7 +20,6 @@ export const daemonCommand = new Command('daemon').description('Manage the Jelly
 daemonCommand.hook('preAction', async (_thisCommand, actionCommand) => {
     if (actionCommand.name() !== 'run') {
         spinner = ora({ isEnabled: isatty(1) })
-        await connect()
     }
 })
 
