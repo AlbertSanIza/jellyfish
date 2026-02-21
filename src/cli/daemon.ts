@@ -14,11 +14,11 @@ function disconnect(): void {
     pm2.disconnect()
 }
 
-export const deamonCommand = new Command('deamon').description('Manage the Jellyfish deamon')
+export const daemonCommand = new Command('daemon').description('Manage the Jellyfish daemon')
 
-deamonCommand
+daemonCommand
     .command('start')
-    .description('Start the deamon')
+    .description('Start the daemon')
     .action(async () => {
         await connect()
         pm2.start({ script: SCRIPT, name: NAME, interpreter: 'bun' }, (err) => {
@@ -32,47 +32,47 @@ deamonCommand
         })
     })
 
-deamonCommand
+daemonCommand
     .command('stop')
-    .description('Stop the deamon')
+    .description('Stop the daemon')
     .action(async () => {
         await connect()
         pm2.stop(NAME, (err) => {
             if (err) {
                 disconnect()
-                console.error('Failed to stop deamon:', err)
+                console.error('Failed to stop daemon:', err)
                 process.exit(1)
             }
-            console.log('Deamon stopped')
+            console.log('daemon stopped')
             disconnect()
         })
     })
 
-deamonCommand
+daemonCommand
     .command('restart')
-    .description('Restart the deamon')
+    .description('Restart the daemon')
     .action(async () => {
         await connect()
         pm2.restart(NAME, (err) => {
             if (err) {
                 disconnect()
-                console.error('Failed to restart deamon:', err)
+                console.error('Failed to restart daemon:', err)
                 process.exit(1)
             }
-            console.log('Deamon restarted')
+            console.log('daemon restarted')
             disconnect()
         })
     })
 
-deamonCommand
+daemonCommand
     .command('status')
-    .description('Show deamon status')
+    .description('Show daemon status')
     .action(async () => {
         await connect()
         pm2.describe(NAME, (err, list) => {
             if (err || !list.length) {
                 disconnect()
-                console.log('Deamon is not running')
+                console.log('daemon is not running')
                 process.exit(err ? 1 : 0)
             }
             const proc = list[0]
@@ -87,15 +87,15 @@ deamonCommand
         })
     })
 
-deamonCommand
+daemonCommand
     .command('logs')
-    .description('Show deamon logs')
+    .description('Show daemon logs')
     .action(async () => {
         await connect()
         pm2.describe(NAME, (err, list) => {
             disconnect()
             if (err || !list.length) {
-                console.log('Deamon is not running')
+                console.log('daemon is not running')
                 process.exit(err ? 1 : 0)
             }
             const logFile = list[0].pm2_env?.pm_out_log_path
@@ -107,7 +107,7 @@ deamonCommand
         })
     })
 
-deamonCommand
+daemonCommand
     .command('save')
     .description('Save current process list for auto-restart on reboot')
     .action(async () => {
