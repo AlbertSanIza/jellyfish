@@ -14,6 +14,7 @@ const LOG_DIR = join(homedir(), '.jellyfish', 'logs')
 const GUI_DOMAIN = `gui/${process.getuid!()}`
 
 let spinner: Ora
+
 export const daemonCommand = new Command('daemon').description('Manage the Jellyfish daemon')
 
 daemonCommand.hook('preAction', async (_thisCommand, actionCommand) => {
