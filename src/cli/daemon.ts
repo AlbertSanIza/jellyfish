@@ -1,7 +1,7 @@
 import chalk from 'chalk'
 import { Command } from 'commander'
 import { execFile, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isatty } from 'node:tty'
@@ -34,7 +34,8 @@ daemonCommand
         mkdirSync(PLIST_DIR, { recursive: true })
         mkdirSync(LOG_DIR, { recursive: true })
         await launchctl('bootout', GUI_DOMAIN, PLIST_PATH)
-        writeFileSync(PLIST_PATH, buildPlist(process.argv[0]!))
+        const programArgs = getProgramArgs()
+        writeFileSync(PLIST_PATH, buildPlist(programArgs))
         await launchctl('enable', `${GUI_DOMAIN}/${LABEL}`)
         const result = await launchctl('bootstrap', GUI_DOMAIN, PLIST_PATH)
         if (result.code !== 0) {
@@ -47,14 +48,35 @@ daemonCommand
         console.log(chalk.dim(`  Logs:   ${LOG_DIR}/out.log`))
     })
 
+daemonCommand
+    .command('uninstall')
+    .description('Uninstall Jellyfish LaunchAgent')
+    .action(async () => {
+        if (!existsSync(PLIST_PATH)) {
+            spinner.info(`Jellyfish is not installed, to get started run:\n${chalk.blue('jellyfish daemon install')}`)
+            return
+        }
+        spinner.start('Uninstalling Jellyfish LaunchAgent...')
+        await launchctl('bootout', GUI_DOMAIN, PLIST_PATH)
+        unlinkSync(PLIST_PATH)
+        spinner.succeed('Jellyfish uninstalled')
+    })
 
 daemonCommand
     .command('start')
     .description('Start Jellyfish')
     .action(async () => {
+        if (!existsSync(PLIST_PATH)) {
+            spinner.info(`Jellyfish is not installed, to get started run:\n${chalk.blue('jellyfish daemon install')}`)
+            return
+        }
         spinner.start('Starting Jellyfish...')
-        await pm2Start({ name: 'jellyfish', script: process.argv[0], args: ['daemon', 'run'] })
-        spinner.succeed('Jellyfish Started!')
+        const result = await launchctl('kickstart', `${GUI_DOMAIN}/${LABEL}`)
+        if (result.code !== 0) {
+            spinner.fail(`Failed to start: ${result.stderr}`)
+            process.exit(1)
+        }
+        spinner.succeed('Jellyfish started!')
     })
 
 daemonCommand
@@ -62,8 +84,12 @@ daemonCommand
     .description('Stop Jellyfish')
     .action(async () => {
         spinner.start('Stopping Jellyfish...')
-        await pm2Action('stop')
-        spinner.succeed('Jellyfish Stopped!')
+        const result = await launchctl('kill', 'SIGTERM', `${GUI_DOMAIN}/${LABEL}`)
+        if (result.code !== 0) {
+            spinner.fail(`Failed to stop: ${result.stderr}`)
+            process.exit(1)
+        }
+        spinner.succeed('Jellyfish stopped!')
     })
 
 daemonCommand
@@ -71,91 +97,120 @@ daemonCommand
     .description('Restart Jellyfish')
     .action(async () => {
         spinner.start('Restarting Jellyfish...')
-        await pm2Action('restart')
-        spinner.succeed('Jellyfish Restarted!')
+        const result = await launchctl('kickstart', '-k', `${GUI_DOMAIN}/${LABEL}`)
+        if (result.code !== 0) {
+            spinner.fail(`Failed to restart: ${result.stderr}`)
+            process.exit(1)
+        }
+        spinner.succeed('Jellyfish restarted!')
     })
 
 daemonCommand
     .command('status')
     .description('Show Jellyfish status')
     .action(async () => {
-        const list = await pm2Describe()
-        if (!list.length) {
-            spinner.info(`Jellyfish is not registered, to get started run:\n${chalk.blue('jellyfish daemon start')}`)
+        if (!existsSync(PLIST_PATH)) {
+            spinner.info(`Jellyfish is not installed, to get started run:\n${chalk.blue('jellyfish daemon install')}`)
             return
         }
-        const proc = list[0]!
-        console.log(`Name:      ${proc.name}`)
-        console.log(`Status:    ${proc.pm2_env?.status}`)
-        console.log(`PID:       ${proc.pid}`)
-        console.log(`Uptime:    ${proc.pm2_env?.pm_uptime ? new Date(proc.pm2_env.pm_uptime).toISOString() : 'N/A'}`)
-        console.log(`Restarts:  ${proc.pm2_env?.restart_time}`)
-        console.log(`CPU:       ${proc.monit?.cpu}%`)
-        console.log(`Memory:    ${proc.monit?.memory ? (proc.monit.memory / 1024 / 1024).toFixed(1) + ' MB' : 'N/A'}`)
+        const result = await launchctl('print', `${GUI_DOMAIN}/${LABEL}`)
+        if (result.code !== 0) {
+            spinner.info('Jellyfish is not running')
+            return
+        }
+        const output = result.stdout
+        const state = extractValue(output, 'state')
+        const pid = extractValue(output, 'pid')
+        const lastExit = extractValue(output, 'last exit status')
+        console.log(`Label:       ${LABEL}`)
+        console.log(`State:       ${state || 'unknown'}`)
+        console.log(`PID:         ${pid || 'N/A'}`)
+        console.log(`Last Exit:   ${lastExit || 'N/A'}`)
+        console.log(`Plist:       ${PLIST_PATH}`)
+        console.log(`Logs:        ${LOG_DIR}/out.log`)
     })
 
 daemonCommand
     .command('logs')
     .description('Show Jellyfish logs')
-    .action(async () => {
-        const list = await pm2Describe()
-        if (!list.length) {
-            spinner.info(`Jellyfish is not registered, to get started run:\n${chalk.blue('jellyfish daemon start')}`)
+    .action(() => {
+        const outLog = join(LOG_DIR, 'out.log')
+        const errLog = join(LOG_DIR, 'err.log')
+        const files = [outLog, errLog].filter(existsSync)
+        if (!files.length) {
+            spinner.info('No log files found')
             return
         }
-        const logFile = list[0]!.pm2_env?.pm_out_log_path
-        const errFile = list[0]!.pm2_env?.pm_err_log_path
-        if (logFile) {
-            console.log(`Out: ${logFile}`)
-        }
-        if (errFile) {
-            console.log(`Err: ${errFile}`)
-        }
-        spawnSync('tail', ['-f', logFile, errFile].filter(Boolean) as string[], { stdio: 'inherit' })
-    })
-
-daemonCommand
-    .command('save')
-    .description('Save current process list for auto-restart on reboot')
-    .action(async () => {
-        await pm2Dump()
-        console.log('Jellyfish process list saved')
+        spawn('tail', ['-f', ...files], { stdio: 'inherit' })
     })
 
 daemonCommand.command('run', { hidden: true }).action(async () => {
+    loadEnvFile()
     await import('../agent/index')
 })
 
-function connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-        pm2.connect((err) => (err ? reject(err) : resolve()))
+function launchctl(...args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
+    return new Promise((resolve) => {
+        execFile('launchctl', args, { encoding: 'utf-8' }, (error, stdout, stderr) => {
+            resolve({ stdout, stderr, code: error ? ((error as any).code ?? 1) : 0 })
+        })
     })
 }
 
-function disconnect(): void {
-    pm2.disconnect()
+function extractValue(output: string, key: string): string | undefined {
+    const regex = new RegExp(`${key}\\s*=\\s*(.+)`, 'i')
+    return output.match(regex)?.[1]?.trim()
 }
 
-function pm2Start(opts: pm2.StartOptions): Promise<void> {
-    return new Promise((resolve, reject) => {
-        pm2.start(opts, (err) => (err ? reject(err) : resolve()))
-    })
+function getProgramArgs(): string[] {
+    // In dev: process.argv = ['bun', 'src/index.ts', 'daemon', 'install', ...]
+    // In prod: process.argv = ['/path/to/jellyfish', 'daemon', 'install', ...]
+    const daemonIdx = process.argv.indexOf('daemon')
+    const base = process.argv.slice(0, daemonIdx)
+    return [...base, 'daemon', 'run']
 }
 
-function pm2Action(action: 'stop' | 'restart'): Promise<void> {
-    return new Promise((resolve, reject) => {
-        pm2[action]('jellyfish', (err) => (err ? reject(err) : resolve()))
-    })
+function buildPlist(programArgs: string[]): string {
+    const argsXml = programArgs.map((arg) => `                <string>${arg}</string>`).join('\n')
+    return `
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>Label</key>
+            <string>${LABEL}</string>
+            <key>ProgramArguments</key>
+            <array>
+                ${argsXml}
+            </array>
+            <key>RunAtLoad</key>
+            <true/>
+            <key>KeepAlive</key>
+            <true/>
+            <key>StandardOutPath</key>
+            <string>${LOG_DIR}/out.log</string>
+            <key>StandardErrorPath</key>
+            <string>${LOG_DIR}/err.log</string>
+        </dict>
+        </plist>
+    `
 }
 
-function pm2Describe(): Promise<pm2.ProcessDescription[]> {
-    return new Promise((resolve, reject) => {
-        pm2.describe('jellyfish', (err, list) => (err ? reject(err) : resolve(list)))
-    })
-}
+const ENV_PATH = join(homedir(), '.jellyfish', '.env')
 
-function pm2Dump(): Promise<void> {
-    return new Promise((resolve, reject) => {
-        pm2.dump((err) => (err ? reject(err) : resolve()))
-    })
+function loadEnvFile() {
+    if (!existsSync(ENV_PATH)) return
+    const content = readFileSync(ENV_PATH, 'utf-8')
+    for (const line of content.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('#')) continue
+        const eqIdx = trimmed.indexOf('=')
+        if (eqIdx === -1) continue
+        const key = trimmed.slice(0, eqIdx).trim()
+        let value = trimmed.slice(eqIdx + 1).trim()
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.slice(1, -1)
+        }
+        if (!process.env[key]) process.env[key] = value
+    }
 }
