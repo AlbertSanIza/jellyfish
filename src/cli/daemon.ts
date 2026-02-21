@@ -1,3 +1,4 @@
+import chalk from 'chalk'
 import { Command } from 'commander'
 import { isatty } from 'node:tty'
 import ora, { type Ora } from 'ora'
@@ -52,7 +53,7 @@ daemonCommand
     .action(async () => {
         const list = await pm2Describe()
         if (!list.length) {
-            spinner.info('Jellyfish is not running')
+            spinner.info(`Jellyfish is not registered, to get started run:\n${chalk.blue('jellyfish daemon start')}`)
             return
         }
         const proc = list[0]!
@@ -71,7 +72,7 @@ daemonCommand
     .action(async () => {
         const list = await pm2Describe()
         if (!list.length) {
-            spinner.info('Jellyfish is not running')
+            spinner.info(`Jellyfish is not registered, to get started run:\n${chalk.blue('jellyfish daemon start')}`)
             return
         }
         const logFile = list[0]!.pm2_env?.pm_out_log_path
