@@ -1,9 +1,17 @@
 import chalk from 'chalk'
 import { Command } from 'commander'
 import { spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { isatty } from 'node:tty'
 import ora, { type Ora } from 'ora'
-import pm2 from 'pm2'
+
+const LABEL = 'com.jellyfish.daemon'
+const PLIST_DIR = join(homedir(), 'Library', 'LaunchAgents')
+const PLIST_PATH = join(PLIST_DIR, `${LABEL}.plist`)
+const LOG_DIR = join(homedir(), '.jellyfish', 'logs')
+const GUI_DOMAIN = `gui/${process.getuid!()}`
 
 let spinner: Ora
 export const daemonCommand = new Command('daemon').description('Manage the Jellyfish daemon')
