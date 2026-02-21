@@ -12,6 +12,7 @@ daemonCommand.hook('preAction', async (_thisCommand, actionCommand) => {
         await connect()
     }
 })
+
 daemonCommand.hook('postAction', (_thisCommand, actionCommand) => {
     if (actionCommand.name() !== 'run') {
         disconnect()
@@ -51,7 +52,7 @@ daemonCommand
     .action(async () => {
         const list = await pm2Describe()
         if (!list.length) {
-            console.log('Jellyfish is not running')
+            spinner.info('Jellyfish is not running')
             return
         }
         const proc = list[0]!
