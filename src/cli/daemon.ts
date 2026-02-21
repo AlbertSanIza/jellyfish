@@ -71,11 +71,9 @@ daemonCommand
             return
         }
         spinner.start('Starting Jellyfish...')
-        const result = await launchctl('kickstart', `${GUI_DOMAIN}/${LABEL}`)
-        if (result.code !== 0) {
-            spinner.fail(`Failed to start: ${result.stderr}`)
-            process.exit(1)
-        }
+        await launchctl('bootstrap', GUI_DOMAIN, PLIST_PATH)
+        await launchctl('enable', `${GUI_DOMAIN}/${LABEL}`)
+        await launchctl('kickstart', '-k', `${GUI_DOMAIN}/${LABEL}`)
         spinner.succeed('Jellyfish started!')
     })
 
@@ -84,11 +82,7 @@ daemonCommand
     .description('Stop Jellyfish')
     .action(async () => {
         spinner.start('Stopping Jellyfish...')
-        const result = await launchctl('kill', 'SIGTERM', `${GUI_DOMAIN}/${LABEL}`)
-        if (result.code !== 0) {
-            spinner.fail(`Failed to stop: ${result.stderr}`)
-            process.exit(1)
-        }
+        await launchctl('bootout', `${GUI_DOMAIN}/${LABEL}`)
         spinner.succeed('Jellyfish stopped!')
     })
 
@@ -187,6 +181,13 @@ function buildPlist(programArgs: string[]): string {
             <true/>
             <key>KeepAlive</key>
             <true/>
+            <key>EnvironmentVariables</key>
+            <dict>
+                <key>PATH</key>
+                <string>${process.env.PATH}</string>
+                <key>HOME</key>
+                <string>${homedir()}</string>
+            </dict>
             <key>StandardOutPath</key>
             <string>${LOG_DIR}/out.log</string>
             <key>StandardErrorPath</key>

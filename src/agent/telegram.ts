@@ -6,7 +6,7 @@ import path from 'node:path'
 import { runAgent } from './agent'
 import { addCron, loadCrons, removeCron } from './cron'
 import { killJob, listJobs, loadJobs, spawnJob, type AgentName } from './jobs'
-import { clearAlwaysAllowed, createCanUseTool, handlePermissionCallback } from './permissions'
+import { createCanUseTool, handlePermissionCallback } from './permissions'
 import { clearSession, loadSession } from './session'
 import { drainPendingFilesForChat } from './tools'
 import { ALLOWED_CHAT_IDS, BOT_TOKEN } from './utils'
@@ -173,21 +173,25 @@ export const createBot = (): Bot => {
     })
 
     bot.on('message:text', async (ctx) => {
+        console.log(`[telegram] message received from ${ctx.chat.id}: "${ctx.message.text.slice(0, 50)}"`)
         const typingLoop = startTypingLoop(ctx)
         await setProcessingReaction(ctx, true)
         try {
             const canUseTool = createCanUseTool(bot.api, ctx.chat.id)
+            console.log(`[telegram] calling runAgent...`)
             const finalText = await runAgent(ctx.chat.id, ctx.message.text, undefined, canUseTool)
+            console.log(`[telegram] runAgent completed, response length: ${finalText.length}`)
             await sendFormattedReply(ctx, finalText)
             await sendPendingFiles(ctx)
         } catch (error) {
             void drainPendingFilesForChat(ctx.chat.id)
             const visibleError = `Agent Error: ${error instanceof Error ? error.message : 'Unknown'}`
-            console.error(visibleError)
+            console.error(`[telegram] error:`, error)
             await ctx.reply(visibleError)
         } finally {
             clearInterval(typingLoop)
             await setProcessingReaction(ctx, false)
+            console.log(`[telegram] done processing message`)
         }
     })
 
