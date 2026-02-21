@@ -1,6 +1,6 @@
 # Jellyfish 🪼
 
-A simple yet powerful personal assistant
+A simple yet powerful personal assistant inspired by OpenClaw
 
 ## Install
 
