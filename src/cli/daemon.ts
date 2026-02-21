@@ -23,11 +23,6 @@ daemonCommand.hook('preAction', async (_thisCommand, actionCommand) => {
     }
 })
 
-daemonCommand.hook('postAction', (_thisCommand, actionCommand) => {
-    if (actionCommand.name() !== 'run') {
-        disconnect()
-    }
-})
 
 daemonCommand
     .command('start')
