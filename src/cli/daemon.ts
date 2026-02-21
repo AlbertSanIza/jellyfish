@@ -4,16 +4,6 @@ import pm2 from 'pm2'
 const NAME = 'jellyfish'
 const SCRIPT = new URL('../agent/bot.ts', import.meta.url).pathname
 
-function connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-        pm2.connect((err) => (err ? reject(err) : resolve()))
-    })
-}
-
-function disconnect(): void {
-    pm2.disconnect()
-}
-
 export const daemonCommand = new Command('daemon').description('Manage the Jellyfish daemon')
 
 daemonCommand
@@ -122,3 +112,13 @@ daemonCommand
             disconnect()
         })
     })
+
+function connect(): Promise<void> {
+    return new Promise((resolve, reject) => {
+        pm2.connect((err) => (err ? reject(err) : resolve()))
+    })
+}
+
+function disconnect(): void {
+    pm2.disconnect()
+}
