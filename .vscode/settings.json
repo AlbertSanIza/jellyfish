@@ -1,8 +1,9 @@
 {
-    "cSpell.language": "en,es-ES",
-    "cSpell.words": ["jellyfish", "grammy", "chatid", "cron", "dotenv"],
+    "cSpell.language": "en",
     "editor.codeActionsOnSave": {
-        "source.organizeImports": "explicit"
+        "source.fixAll.eslint": "explicit",
+        "source.organizeImports": "explicit",
+        "source.sortMembers": "explicit"
     },
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.formatOnSave": true,
@@ -23,5 +24,6 @@
     "search.exclude": {
         "**/bun.lock": true
     },
+    "workbench.colorTheme": "Default Dark+",
     "workbench.iconTheme": "material-icon-theme"
 }

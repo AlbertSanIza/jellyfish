@@ -1,0 +1,2 @@
+- Create a soul
+- Create a memory system
