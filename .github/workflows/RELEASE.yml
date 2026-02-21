@@ -9,14 +9,48 @@ concurrency:
     cancel-in-progress: true
 jobs:
     release:
-        name: Build
         runs-on: ubuntu-latest
+        permissions:
+            contents: write
         steps:
             - name: Checkout
               uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
             - name: Setup Bun
               uses: oven-sh/setup-bun@v2
             - name: Install
               run: bun install --frozen-lockfile
-            - name: Build
-              run: bun run build
+            - name: Determine version
+              id: version
+              run: |
+                  latest_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+                  if [ -z "$latest_tag" ]; then
+                      new_version="v0.0.1"
+                  else
+                      IFS='.' read -r major minor patch <<< "${latest_tag#v}"
+                      new_version="v${major}.${minor}.$((patch + 1))"
+                  fi
+                  echo "version=${new_version}" >> $GITHUB_OUTPUT
+            - name: Inject version into package.json
+              run: jq --arg v "${{ steps.version.outputs.version }}" '.version = ($v | ltrimstr("v"))' package.json > package.tmp && mv package.tmp package.json
+            - name: Build all targets
+              run: |
+                  mkdir -p dist
+                  targets=("bun-darwin-arm64:darwin-aarch64" "bun-darwin-x64:darwin-x64" "bun-linux-x64:linux-x64" "bun-linux-arm64:linux-aarch64")
+                  for entry in "${targets[@]}"; do
+                      bun_target="${entry%%:*}"
+                      name="${entry##*:}"
+                      bun build --compile --minify --sourcemap --bytecode --target="$bun_target" src/index.ts --outfile "dist/jellyfish"
+                      cd dist
+                      zip "jellyfish-${name}.zip" jellyfish
+                      rm jellyfish
+                      cd ..
+                  done
+            - name: Create Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ steps.version.outputs.version }}
+                  name: ${{ steps.version.outputs.version }}
+                  generate_release_notes: true
+                  files: dist/*.zip
