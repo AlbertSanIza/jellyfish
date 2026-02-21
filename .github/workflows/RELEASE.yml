@@ -35,7 +35,7 @@ jobs:
             - name: Build all targets
               run: |
                   mkdir -p dist
-                  targets=("bun-darwin-arm64:darwin-aarch64" "bun-darwin-x64:darwin-x64" "bun-linux-x64:linux-x64" "bun-linux-arm64:linux-aarch64")
+                  targets=("bun-darwin-arm64:darwin-aarch64")
                   for entry in "${targets[@]}"; do
                       bun_target="${entry%%:*}"
                       name="${entry##*:}"
