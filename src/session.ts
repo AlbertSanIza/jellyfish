@@ -1,6 +1,6 @@
 import { mkdir, unlink } from 'node:fs/promises'
-import path from 'node:path'
 import os from 'node:os'
+import path from 'node:path'
 
 export type SessionRole = 'system' | 'user' | 'assistant'
 
@@ -10,63 +10,65 @@ export interface SessionMessage {
     timestamp: string
 }
 
+export interface SessionData {
+    sdkSessionId?: string // Claude Agent SDK session ID — used to resume the conversation
+    messages: SessionMessage[]
+}
+
 const baseDir = path.join(os.homedir(), '.jellyfish')
 const sessionsDir = path.join(baseDir, 'sessions')
 
-const getSessionPath = (chatId: string): string => path.join(sessionsDir, `${chatId}.json`)
+const getSessionPath = (chatId: number): string => path.join(sessionsDir, `${chatId}.json`)
 
 const ensureSessionsDir = async (): Promise<void> => {
     await mkdir(sessionsDir, { recursive: true })
 }
 
-export const loadSession = async (chatId: string): Promise<SessionMessage[]> => {
+const isSessionMessage = (item: unknown): item is SessionMessage => {
+    if (typeof item !== 'object' || item === null) return false
+    const c = item as Record<string, unknown>
+    return (c.role === 'system' || c.role === 'user' || c.role === 'assistant') && typeof c.content === 'string' && typeof c.timestamp === 'string'
+}
+
+export const loadSession = async (chatId: number): Promise<SessionData> => {
     await ensureSessionsDir()
     const sessionPath = getSessionPath(chatId)
-
     try {
         const raw = await Bun.file(sessionPath).text()
         const parsed = JSON.parse(raw) as unknown
-
-        if (!Array.isArray(parsed)) {
-            return []
+        // Legacy format: plain array of messages
+        if (Array.isArray(parsed)) {
+            return { messages: parsed.filter(isSessionMessage) }
         }
-
-        return parsed.filter((item): item is SessionMessage => {
-            if (typeof item !== 'object' || item === null) {
-                return false
+        // Current format: { sdkSessionId?, messages[] }
+        if (typeof parsed === 'object' && parsed !== null) {
+            const data = parsed as Record<string, unknown>
+            return {
+                sdkSessionId: typeof data.sdkSessionId === 'string' ? data.sdkSessionId : undefined,
+                messages: Array.isArray(data.messages) ? data.messages.filter(isSessionMessage) : []
             }
-
-            const candidate = item as Record<string, unknown>
-            return (
-                (candidate.role === 'system' || candidate.role === 'user' || candidate.role === 'assistant') &&
-                typeof candidate.content === 'string' &&
-                typeof candidate.timestamp === 'string'
-            )
-        })
+        }
+        return { messages: [] }
     } catch (error) {
         const err = error as NodeJS.ErrnoException
-        if (err.code === 'ENOENT') {
-            return []
-        }
+        if (err.code === 'ENOENT') return { messages: [] }
         throw error
     }
 }
 
-export const saveSession = async (chatId: string, messages: SessionMessage[]): Promise<void> => {
+export const saveSession = async (chatId: number, data: SessionData): Promise<void> => {
     await ensureSessionsDir()
     const sessionPath = getSessionPath(chatId)
-    await Bun.write(sessionPath, JSON.stringify(messages, null, 2))
+    await Bun.write(sessionPath, JSON.stringify(data, null, 2))
 }
 
-export const clearSession = async (chatId: string): Promise<void> => {
+export const clearSession = async (chatId: number): Promise<void> => {
     await ensureSessionsDir()
     const sessionPath = getSessionPath(chatId)
     try {
         await unlink(sessionPath)
     } catch (error) {
         const err = error as NodeJS.ErrnoException
-        if (err.code !== 'ENOENT') {
-            throw error
-        }
+        if (err.code !== 'ENOENT') throw error
     }
 }
