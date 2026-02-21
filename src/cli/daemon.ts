@@ -21,7 +21,7 @@ daemonCommand.hook('postAction', (_thisCommand, actionCommand) => {
 
 daemonCommand
     .command('start')
-    .description('Start the daemon')
+    .description('Start Jellyfish')
     .action(async () => {
         spinner.start('Starting Jellyfish...')
         await pm2Start({ name: 'jellyfish', script: process.argv[0], args: ['daemon', 'run'] })
@@ -30,7 +30,7 @@ daemonCommand
 
 daemonCommand
     .command('stop')
-    .description('Stop the daemon')
+    .description('Stop Jellyfish')
     .action(async () => {
         spinner.start('Stopping Jellyfish...')
         await pm2Action('stop')
@@ -39,7 +39,7 @@ daemonCommand
 
 daemonCommand
     .command('restart')
-    .description('Restart the daemon')
+    .description('Restart Jellyfish')
     .action(async () => {
         spinner.start('Restarting Jellyfish...')
         await pm2Action('restart')
@@ -67,11 +67,11 @@ daemonCommand
 
 daemonCommand
     .command('logs')
-    .description('Show daemon logs')
+    .description('Show Jellyfish logs')
     .action(async () => {
         const list = await pm2Describe()
         if (!list.length) {
-            console.log('Jellyfish is not running')
+            spinner.info('Jellyfish is not running')
             return
         }
         const logFile = list[0]!.pm2_env?.pm_out_log_path
