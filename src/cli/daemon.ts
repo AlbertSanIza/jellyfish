@@ -2,7 +2,7 @@ import { Command } from 'commander'
 import pm2 from 'pm2'
 
 const NAME = 'jellyfish'
-const SCRIPT = new URL('../agent/bot.ts', import.meta.url).pathname
+const SCRIPT = new URL('../agent/index.ts', import.meta.url).pathname
 
 export const daemonCommand = new Command('daemon').description('Manage the Jellyfish daemon')
 
@@ -14,10 +14,10 @@ daemonCommand
         pm2.start({ script: SCRIPT, name: NAME, interpreter: 'bun' }, (err) => {
             if (err) {
                 disconnect()
-                console.error('Failed to start gateway:', err)
+                console.error('Failed to start daemon:', err)
                 process.exit(1)
             }
-            console.log('Gateway started')
+            console.log('Daemon started')
             disconnect()
         })
     })
