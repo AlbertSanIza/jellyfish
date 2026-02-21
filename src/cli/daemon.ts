@@ -1,117 +1,97 @@
 import { Command } from 'commander'
+import { isatty } from 'node:tty'
+import ora, { type Ora } from 'ora'
 import pm2 from 'pm2'
 
-const NAME = 'jellyfish'
-const SCRIPT = new URL('../agent', import.meta.url).pathname
-
+let spinner: Ora
 export const daemonCommand = new Command('daemon').description('Manage the Jellyfish daemon')
+
+daemonCommand.hook('preAction', async (_thisCommand, actionCommand) => {
+    if (actionCommand.name() !== 'run') {
+        spinner = ora({ isEnabled: isatty(1) })
+        await connect()
+    }
+})
+daemonCommand.hook('postAction', (_thisCommand, actionCommand) => {
+    if (actionCommand.name() !== 'run') {
+        disconnect()
+    }
+})
 
 daemonCommand
     .command('start')
     .description('Start the daemon')
     .action(async () => {
-        await connect()
-        pm2.start({ script: SCRIPT, name: NAME, interpreter: 'bun' }, (err) => {
-            if (err) {
-                disconnect()
-                console.error('Failed to start daemon:', err)
-                process.exit(1)
-            }
-            console.log('Daemon started')
-            disconnect()
-        })
+        spinner.start('Starting Jellyfish...')
+        await pm2Start({ name: 'jellyfish', script: process.argv[0], args: ['daemon', 'run'] })
+        spinner.succeed('Jellyfish Started!')
     })
 
 daemonCommand
     .command('stop')
     .description('Stop the daemon')
     .action(async () => {
-        await connect()
-        pm2.stop(NAME, (err) => {
-            if (err) {
-                disconnect()
-                console.error('Failed to stop daemon:', err)
-                process.exit(1)
-            }
-            console.log('daemon stopped')
-            disconnect()
-        })
+        spinner.start('Stopping Jellyfish...')
+        await pm2Action('stop')
+        spinner.succeed('Jellyfish Stopped!')
     })
 
 daemonCommand
     .command('restart')
     .description('Restart the daemon')
     .action(async () => {
-        await connect()
-        pm2.restart(NAME, (err) => {
-            if (err) {
-                disconnect()
-                console.error('Failed to restart daemon:', err)
-                process.exit(1)
-            }
-            console.log('daemon restarted')
-            disconnect()
-        })
+        spinner.start('Restarting Jellyfish...')
+        await pm2Action('restart')
+        spinner.succeed('Jellyfish Restarted!')
     })
 
 daemonCommand
     .command('status')
-    .description('Show daemon status')
+    .description('Show Jellyfish status')
     .action(async () => {
-        await connect()
-        pm2.describe(NAME, (err, list) => {
-            if (err || !list.length) {
-                disconnect()
-                console.log('daemon is not running')
-                process.exit(err ? 1 : 0)
-            }
-            const proc = list[0]
-            console.log(`Name:      ${proc.name}`)
-            console.log(`Status:    ${proc.pm2_env?.status}`)
-            console.log(`PID:       ${proc.pid}`)
-            console.log(`Uptime:    ${proc.pm2_env?.pm_uptime ? new Date(proc.pm2_env.pm_uptime).toISOString() : 'N/A'}`)
-            console.log(`Restarts:  ${proc.pm2_env?.restart_time}`)
-            console.log(`CPU:       ${proc.monit?.cpu}%`)
-            console.log(`Memory:    ${proc.monit?.memory ? (proc.monit.memory / 1024 / 1024).toFixed(1) + ' MB' : 'N/A'}`)
-            disconnect()
-        })
+        const list = await pm2Describe()
+        if (!list.length) {
+            console.log('Jellyfish is not running')
+            return
+        }
+        const proc = list[0]!
+        console.log(`Name:      ${proc.name}`)
+        console.log(`Status:    ${proc.pm2_env?.status}`)
+        console.log(`PID:       ${proc.pid}`)
+        console.log(`Uptime:    ${proc.pm2_env?.pm_uptime ? new Date(proc.pm2_env.pm_uptime).toISOString() : 'N/A'}`)
+        console.log(`Restarts:  ${proc.pm2_env?.restart_time}`)
+        console.log(`CPU:       ${proc.monit?.cpu}%`)
+        console.log(`Memory:    ${proc.monit?.memory ? (proc.monit.memory / 1024 / 1024).toFixed(1) + ' MB' : 'N/A'}`)
     })
 
 daemonCommand
     .command('logs')
     .description('Show daemon logs')
     .action(async () => {
-        await connect()
-        pm2.describe(NAME, (err, list) => {
-            disconnect()
-            if (err || !list.length) {
-                console.log('daemon is not running')
-                process.exit(err ? 1 : 0)
-            }
-            const logFile = list[0].pm2_env?.pm_out_log_path
-            const errFile = list[0].pm2_env?.pm_err_log_path
-            if (logFile) console.log(`Out: ${logFile}`)
-            if (errFile) console.log(`Err: ${errFile}`)
-            const { spawnSync } = require('child_process')
-            spawnSync('tail', ['-f', logFile, errFile].filter(Boolean) as string[], { stdio: 'inherit' })
-        })
+        const list = await pm2Describe()
+        if (!list.length) {
+            console.log('Jellyfish is not running')
+            return
+        }
+        const logFile = list[0]!.pm2_env?.pm_out_log_path
+        const errFile = list[0]!.pm2_env?.pm_err_log_path
+        if (logFile) console.log(`Out: ${logFile}`)
+        if (errFile) console.log(`Err: ${errFile}`)
+        const { spawnSync } = require('child_process')
+        spawnSync('tail', ['-f', logFile, errFile].filter(Boolean) as string[], { stdio: 'inherit' })
     })
 
 daemonCommand
     .command('save')
     .description('Save current process list for auto-restart on reboot')
     .action(async () => {
-        await connect()
-        pm2.dump((err) => {
-            if (err) {
-                disconnect()
-                console.error('Failed to save:', err)
-                process.exit(1)
-            }
-            console.log('Process list saved')
-            disconnect()
-        })
+        await pm2Dump()
+        console.log('Jellyfish process list saved')
     })
+
+daemonCommand.command('run', { hidden: true }).action(async () => {
+    await import('../agent/index')
+})
 
 function connect(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -121,4 +101,28 @@ function connect(): Promise<void> {
 
 function disconnect(): void {
     pm2.disconnect()
+}
+
+function pm2Start(opts: pm2.StartOptions): Promise<void> {
+    return new Promise((resolve, reject) => {
+        pm2.start(opts, (err) => (err ? reject(err) : resolve()))
+    })
+}
+
+function pm2Action(action: 'stop' | 'restart'): Promise<void> {
+    return new Promise((resolve, reject) => {
+        pm2[action]('jellyfish', (err) => (err ? reject(err) : resolve()))
+    })
+}
+
+function pm2Describe(): Promise<pm2.ProcessDescription[]> {
+    return new Promise((resolve, reject) => {
+        pm2.describe('jellyfish', (err, list) => (err ? reject(err) : resolve(list)))
+    })
+}
+
+function pm2Dump(): Promise<void> {
+    return new Promise((resolve, reject) => {
+        pm2.dump((err) => (err ? reject(err) : resolve()))
+    })
 }
