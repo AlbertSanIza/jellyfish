@@ -10,7 +10,8 @@
         "build": "bun build --compile --minify --sourcemap --bytecode src/index.ts --outfile dist/jellyfish",
         "prettier": "prettier --check .",
         "prettier:fix": "prettier --write .",
-        "prepare": "husky"
+        "prepare": "husky",
+        "pm2": "pm2"
     },
     "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "^0.2.50",
