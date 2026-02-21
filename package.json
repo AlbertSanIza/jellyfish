@@ -1,12 +1,13 @@
 {
     "name": "jellyfish",
-    "description": "",
+    "description": "A simple yet powerful personal assistant 🪼",
     "version": "1.0.0",
     "type": "module",
     "module": "src/index.ts",
     "private": true,
     "scripts": {
         "dev": "bun src/index.ts",
+        "build": "bun build --compile --minify --sourcemap --bytecode --target=bun-darwin-arm64 src/index.ts --outfile dist/jellyfish",
         "prettier": "prettier --check .",
         "prettier:fix": "prettier --write .",
         "deamon:start": "bun index.ts",
