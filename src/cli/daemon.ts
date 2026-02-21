@@ -1,5 +1,6 @@
 import chalk from 'chalk'
 import { Command } from 'commander'
+import { spawnSync } from 'node:child_process'
 import { isatty } from 'node:tty'
 import ora, { type Ora } from 'ora'
 import pm2 from 'pm2'
@@ -77,9 +78,12 @@ daemonCommand
         }
         const logFile = list[0]!.pm2_env?.pm_out_log_path
         const errFile = list[0]!.pm2_env?.pm_err_log_path
-        if (logFile) console.log(`Out: ${logFile}`)
-        if (errFile) console.log(`Err: ${errFile}`)
-        const { spawnSync } = require('child_process')
+        if (logFile) {
+            console.log(`Out: ${logFile}`)
+        }
+        if (errFile) {
+            console.log(`Err: ${errFile}`)
+        }
         spawnSync('tail', ['-f', logFile, errFile].filter(Boolean) as string[], { stdio: 'inherit' })
     })
 
