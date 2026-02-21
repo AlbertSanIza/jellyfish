@@ -5,7 +5,7 @@ A simple yet powerful personal assistant
 ## Install
 
 ```bash
-gh api -H "Accept: application/vnd.github.raw" "repos/AlbertSanIza/jellyfish/contents/install.sh?ref=main" | bash
+curl -fsSL https://raw.githubusercontent.com/AlbertSanIza/jellyfish/main/install.sh | bash
 ```
 
 ## Usage
