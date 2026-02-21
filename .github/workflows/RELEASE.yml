@@ -3,59 +3,20 @@ on:
     push:
         branches:
             - main
-permissions:
-    contents: write
+    workflow_dispatch:
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
 jobs:
     release:
-        name: Bump, Build, Release
+        name: Build, Release
         runs-on: macos-latest
         steps:
             - name: Checkout
               uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-                  token: ${{ secrets.RELEASE_TOKEN }}
             - name: Setup Bun
               uses: oven-sh/setup-bun@v2
             - name: Install
               run: bun install --frozen-lockfile
-            - name: Bump Version
-              id: version
-              run: |
-                  LATEST_TAG="$(git tag --list 'v*' --sort=-v:refname | head -n1)"
-                  if [ -z "$LATEST_TAG" ]; then
-                    NEW_VERSION="$(jq -r '.version' package.json)"
-                  else
-                    VERSION="${LATEST_TAG#v}"
-                    IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-                    PATCH=$((PATCH + 1))
-                    NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-                  fi
-                  jq --arg v "$NEW_VERSION" '.version = $v' package.json > package.json.tmp
-                  mv package.json.tmp package.json
-                  bunx prettier --write package.json
-                  echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-                  echo "tag=v$NEW_VERSION" >> "$GITHUB_OUTPUT"
-                  sed -i '' "s|Version-[^-]*-blue|Version-$NEW_VERSION-blue|" README.md
-            - name: Commit and Push
-              run: |
-                  if git diff --quiet package.json README.md; then
-                    echo "No version change to commit."
-                    exit 0
-                  fi
-                  git config user.name "github-actions[bot]"
-                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-                  git add package.json README.md
-                  git commit -m "Release: v${{ steps.version.outputs.version }} [skip actions]"
-                  git tag "${{ steps.version.outputs.tag }}"
-                  git push origin HEAD:main --follow-tags
             - name: Build
               run: bun run build
-            - name: Package
-              run: tar -czf dist/leslie-knope-darwin-arm64.tar.gz -C dist leslie-knope
-            - name: GitHub Release
-              uses: softprops/action-gh-release@v2
-              with:
-                  tag_name: ${{ steps.version.outputs.tag }}
-                  generate_release_notes: true
-                  files: dist/leslie-knope-darwin-arm64.tar.gz
