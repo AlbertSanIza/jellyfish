@@ -1,6 +1,6 @@
-# jellyfish
+# Jellyfish 🪼
 
-A simple yet powerful personal assistant 🪼
+A simple yet powerful personal assistant
 
 ## Install
 
