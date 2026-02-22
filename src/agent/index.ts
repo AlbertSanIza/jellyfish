@@ -1,9 +1,9 @@
 import chalk from 'chalk'
 import figlet from 'figlet'
 
-import { runAgent } from './src/agent'
-import { startCronScheduler } from './src/cron'
-import { createBot } from './src/telegram'
+import { runAgent } from './agent'
+import { startCronScheduler } from './cron'
+import { createBot } from './telegram'
 
 const bot = createBot()
 
