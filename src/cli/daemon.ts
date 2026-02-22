@@ -45,14 +45,19 @@ daemonCommand
     .command('start')
     .description('Start Jellyfish')
     .action(async () => {
-        spinner.start('Starting Jellyfish')
-        const list = await pm2Describe()
-        if (list.length) {
-            await pm2Action('restart')
-        } else {
-            await pm2Start({ name: PROCESS_NAME, script: process.argv[0], args: ['daemon', 'run'] })
+        try {
+            spinner.start('Starting Jellyfish')
+            const list = await pm2Describe()
+            if (list.length) {
+                await pm2Action('restart')
+            } else {
+                await pm2Start({ name: PROCESS_NAME, script: process.argv[0], args: ['daemon', 'run'] })
+            }
+            spinner.succeed('Jellyfish Started')
+        } catch (err) {
+            spinner.fail(`Failed to start: ${err instanceof Error ? err.message : err}`)
+            process.exit(1)
         }
-        spinner.succeed('Jellyfish Started')
     })
 
 daemonCommand
