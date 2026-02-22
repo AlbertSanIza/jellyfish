@@ -64,14 +64,19 @@ daemonCommand
     .command('restart')
     .description('Restart Jellyfish')
     .action(async () => {
-        spinner.start('Restarting Jellyfish')
-        const list = await pm2Describe()
-        if (!list.length) {
-            spinner.info(`Jellyfish is not registered, to get started run:\n${chalk.blue('jellyfish daemon start')}`)
-            return
+        try {
+            spinner.start('Restarting Jellyfish')
+            const list = await pm2Describe()
+            if (!list.length) {
+                spinner.info(`Jellyfish is not registered, to get started run:\n${chalk.blue('jellyfish daemon start')}`)
+                return
+            }
+            await pm2Action('restart')
+            spinner.succeed('Jellyfish Restarted')
+        } catch (err) {
+            spinner.fail(`Failed to restart: ${err instanceof Error ? err.message : err}`)
+            process.exit(1)
         }
-        await pm2Action('restart')
-        spinner.succeed('Jellyfish Restarted')
     })
 
 daemonCommand
