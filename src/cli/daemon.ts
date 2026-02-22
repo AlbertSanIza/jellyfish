@@ -48,20 +48,6 @@ daemonCommand
     })
 
 daemonCommand
-    .command('stop')
-    .description('Stop Jellyfish')
-    .action(async () => {
-        spinner.start('Stopping Jellyfish')
-        const list = await pm2Describe()
-        if (!list.length || list[0]!.pm2_env?.status === 'stopped') {
-            spinner.info('Jellyfish is NOT Running')
-            return
-        }
-        await pm2Action('stop')
-        spinner.succeed('Jellyfish Stopped')
-    })
-
-daemonCommand
     .command('restart')
     .description('Restart Jellyfish')
     .action(async () => {
@@ -73,6 +59,20 @@ daemonCommand
         }
         await pm2Action('restart')
         spinner.succeed('Jellyfish Restarted')
+    })
+
+daemonCommand
+    .command('stop')
+    .description('Stop Jellyfish')
+    .action(async () => {
+        spinner.start('Stopping Jellyfish')
+        const list = await pm2Describe()
+        if (!list.length || list[0]!.pm2_env?.status === 'stopped') {
+            spinner.info('Jellyfish is NOT Running')
+            return
+        }
+        await pm2Action('stop')
+        spinner.succeed('Jellyfish Stopped')
     })
 
 daemonCommand
