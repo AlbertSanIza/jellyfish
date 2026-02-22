@@ -64,13 +64,13 @@ daemonCommand
             return
         }
         const proc = list[0]!
-        console.log(`Name:      ${proc.name}`)
-        console.log(`Status:    ${proc.pm2_env?.status}`)
-        console.log(`PID:       ${proc.pid}`)
-        console.log(`Uptime:    ${proc.pm2_env?.pm_uptime ? new Date(proc.pm2_env.pm_uptime).toISOString() : 'N/A'}`)
-        console.log(`Restarts:  ${proc.pm2_env?.restart_time}`)
-        console.log(`CPU:       ${proc.monit?.cpu}%`)
-        console.log(`Memory:    ${proc.monit?.memory ? (proc.monit.memory / 1024 / 1024).toFixed(1) + ' MB' : 'N/A'}`)
+        console.log(`Name:     ${proc.name}`)
+        console.log(`Status:   ${proc.pm2_env?.status}`)
+        console.log(`PID:      ${proc.pid}`)
+        console.log(`Uptime:   ${proc.pm2_env?.pm_uptime ? new Date(proc.pm2_env.pm_uptime).toISOString() : 'N/A'}`)
+        console.log(`Restarts: ${proc.pm2_env?.restart_time}`)
+        console.log(`CPU:      ${proc.monit?.cpu}%`)
+        console.log(`Memory:   ${proc.monit?.memory ? (proc.monit.memory / 1024 / 1024).toFixed(1) + ' MB' : 'N/A'}`)
     })
 
 daemonCommand
