@@ -51,7 +51,8 @@ daemonCommand
             if (list.length) {
                 await pm2Action('restart')
             } else {
-                await pm2Start({ name: PROCESS_NAME, script: process.argv[0], args: ['daemon', 'run'] })
+                const daemonIndex = process.argv.indexOf('daemon')
+                await pm2Start({ name: PROCESS_NAME, script: process.argv[0], args: [...process.argv.slice(1, daemonIndex), 'daemon', 'run'] })
             }
             spinner.succeed('Jellyfish Started')
         } catch (err) {
