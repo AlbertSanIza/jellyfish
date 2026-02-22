@@ -19,8 +19,8 @@ daemonCommand.hook('preAction', async (_thisCommand, actionCommand) => {
 
 daemonCommand.hook('postAction', async (_thisCommand, actionCommand) => {
     const name = actionCommand.name()
-    if (name !== 'run') {
-        if (name !== 'status' && name !== 'logs') {
+    if (name !== 'run' && name !== 'logs') {
+        if (name !== 'status') {
             await pm2Dump()
         }
         disconnect()
@@ -92,20 +92,25 @@ daemonCommand
     .command('logs')
     .description('Jellyfish Logs')
     .action(async () => {
+        disconnect()
+        const result = spawnSync('pm2', ['logs', PROCESS_NAME], { stdio: 'inherit' })
+        if (result.error) {
+            spinner.fail(`pm2 CLI not found. Install it with:\n${chalk.blue('npm install -g pm2')}`)
+        }
+    })
+
+daemonCommand
+    .command('delete')
+    .description('Remove Jellyfish from pm2 process list')
+    .action(async () => {
         const list = await pm2Describe()
         if (!list.length) {
-            spinner.info(`Jellyfish is not registered, to get started run:\n${chalk.blue('jellyfish daemon start')}`)
+            spinner.info('Jellyfish is not registered')
             return
         }
-        const logFile = list[0]!.pm2_env?.pm_out_log_path
-        const errFile = list[0]!.pm2_env?.pm_err_log_path
-        if (logFile) {
-            console.log(`Out: ${logFile}`)
-        }
-        if (errFile) {
-            console.log(`Err: ${errFile}`)
-        }
-        spawnSync('tail', ['-f', logFile, errFile].filter(Boolean) as string[], { stdio: 'inherit' })
+        spinner.start('Removing Jellyfish...')
+        await pm2Delete()
+        spinner.succeed('Jellyfish removed from pm2')
     })
 
 daemonCommand.command('run', { hidden: true }).action(async () => {
@@ -136,6 +141,9 @@ function pm2Describe(): Promise<pm2.ProcessDescription[]> {
     })
 }
 
+function pm2Delete(): Promise<void> {
+    return new Promise((resolve, reject) => {
+        pm2.delete(PROCESS_NAME, (err) => (err ? reject(err) : resolve()))
     })
 }
 
@@ -147,4 +155,16 @@ function pm2Dump(): Promise<void> {
 
 function disconnect(): void {
     pm2.disconnect()
+}
+
+function formatUptime(ms: number): string {
+    const seconds = Math.floor(ms / 1000)
+    const days = Math.floor(seconds / 86400)
+    const hours = Math.floor((seconds % 86400) / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const parts: string[] = []
+    if (days) parts.push(`${days}d`)
+    if (hours) parts.push(`${hours}h`)
+    if (minutes) parts.push(`${minutes}m`)
+    return parts.length ? parts.join(' ') : '<1m'
 }
