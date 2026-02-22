@@ -17,8 +17,12 @@ daemonCommand.hook('preAction', async (_thisCommand, actionCommand) => {
     }
 })
 
-daemonCommand.hook('postAction', (_thisCommand, actionCommand) => {
-    if (actionCommand.name() !== 'run') {
+daemonCommand.hook('postAction', async (_thisCommand, actionCommand) => {
+    const name = actionCommand.name()
+    if (name !== 'run') {
+        if (name !== 'status' && name !== 'logs') {
+            await pm2Dump()
+        }
         disconnect()
     }
 })
