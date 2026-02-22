@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import { runAgent } from './agent'
+import { getModel, runAgent } from './agent'
 import { addCron, loadCrons, removeCron } from './cron'
 import { killJob, listJobs, loadJobs, spawnJob, type AgentName } from './jobs'
 import { clearAlwaysAllowed, createCanUseTool, handlePermissionCallback } from './permissions'
@@ -30,7 +30,23 @@ export const createBot = (): Bot => {
 
     bot.command('new', async (ctx) => {
         await clearSession(ctx.chat!.id)
-        await ctx.reply('Session cleared! Fresh start 🪼')
+        clearAlwaysAllowed(ctx.chat!.id)
+        const model = getModel() ?? 'default'
+        await ctx.reply(`Session cleared\\! Fresh start 🪼\n✅ New session · model: \`${model}\``, { parse_mode: 'MarkdownV2' })
+        const typingLoop = startTypingLoop(ctx)
+        try {
+            const canUseTool = createCanUseTool(bot.api, ctx.chat!.id)
+            const startupPrompt =
+                'A new session was started via /new. Execute your session startup sequence now — read any required context files before responding. Then greet the user in your configured persona. Be yourself — use your defined voice, mannerisms, and mood. Keep it to 1-3 sentences and ask what they want to do.'
+            const finalText = await runAgent(ctx.chat!.id, startupPrompt, undefined, canUseTool)
+            await sendFormattedReply(ctx, finalText)
+        } catch (error) {
+            const visibleError = `Agent Error: ${error instanceof Error ? error.message : 'Unknown'}`
+            console.error(visibleError)
+            await ctx.reply(visibleError)
+        } finally {
+            clearInterval(typingLoop)
+        }
     })
 
     bot.command('status', async (ctx) => {
