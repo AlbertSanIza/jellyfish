@@ -107,10 +107,6 @@ function connect(): Promise<void> {
     })
 }
 
-function disconnect(): void {
-    pm2.disconnect()
-}
-
 function pm2Start(opts: pm2.StartOptions): Promise<void> {
     return new Promise((resolve, reject) => {
         pm2.start(opts, (err) => (err ? reject(err) : resolve()))
@@ -133,4 +129,8 @@ function pm2Dump(): Promise<void> {
     return new Promise((resolve, reject) => {
         pm2.dump((err) => (err ? reject(err) : resolve()))
     })
+}
+
+function disconnect(): void {
+    pm2.disconnect()
 }
