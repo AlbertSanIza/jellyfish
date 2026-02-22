@@ -6,6 +6,8 @@ import ora, { type Ora } from 'ora'
 import pm2 from 'pm2'
 
 let spinner: Ora
+const PROCESS_NAME = 'jellyfish'
+
 export const daemonCommand = new Command('daemon').description('Manage the Jellyfish daemon')
 
 daemonCommand.hook('preAction', async (_thisCommand, actionCommand) => {
@@ -117,13 +119,13 @@ function pm2Start(opts: pm2.StartOptions): Promise<void> {
 
 function pm2Action(action: 'stop' | 'restart'): Promise<void> {
     return new Promise((resolve, reject) => {
-        pm2[action]('jellyfish', (err) => (err ? reject(err) : resolve()))
+        pm2[action](PROCESS_NAME, (err) => (err ? reject(err) : resolve()))
     })
 }
 
 function pm2Describe(): Promise<pm2.ProcessDescription[]> {
     return new Promise((resolve, reject) => {
-        pm2.describe('jellyfish', (err, list) => (err ? reject(err) : resolve(list)))
+        pm2.describe(PROCESS_NAME, (err, list) => (err ? reject(err) : resolve(list)))
     })
 }
 
