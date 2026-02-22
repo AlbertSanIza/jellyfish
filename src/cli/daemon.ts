@@ -136,6 +136,9 @@ function pm2Describe(): Promise<pm2.ProcessDescription[]> {
     })
 }
 
+    })
+}
+
 function pm2Dump(): Promise<void> {
     return new Promise((resolve, reject) => {
         pm2.dump((err) => (err ? reject(err) : resolve()))
