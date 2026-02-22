@@ -61,7 +61,7 @@ export const createBot = (): Bot => {
             const branch = (await runCommand(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd)).trim()
             await runCommand(['git', 'pull', 'origin', branch], cwd)
             await runCommand(['bun', 'install', '--frozen-lockfile'], cwd)
-            const { version } = (await import('../package.json')) as { version: string }
+            const { version } = (await import('../../package.json')) as { version: string }
             await ctx.reply(`✅ Updated to v${version} — restarting...`)
             await runCommand(['pm2', 'restart', 'jellyfish'], cwd)
         } catch (error) {
