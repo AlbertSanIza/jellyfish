@@ -23,6 +23,7 @@ daemonCommand.hook('postAction', async (_thisCommand, actionCommand) => {
         case 'logs':
             break
         case 'status':
+        case 'delete':
             disconnect()
             break
         default:
