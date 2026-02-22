@@ -59,7 +59,7 @@ daemonCommand
         spinner.start('Uninstalling Jellyfish LaunchAgent...')
         await launchctl('bootout', GUI_DOMAIN, PLIST_PATH)
         unlinkSync(PLIST_PATH)
-        spinner.succeed('Jellyfish uninstalled')
+        spinner.succeed('Jellyfish Uninstalled')
     })
 
 daemonCommand
@@ -74,7 +74,7 @@ daemonCommand
         await launchctl('bootstrap', GUI_DOMAIN, PLIST_PATH)
         await launchctl('enable', `${GUI_DOMAIN}/${LABEL}`)
         await launchctl('kickstart', '-k', `${GUI_DOMAIN}/${LABEL}`)
-        spinner.succeed('Jellyfish started!')
+        spinner.succeed('Jellyfish Started!')
     })
 
 daemonCommand
@@ -83,7 +83,7 @@ daemonCommand
     .action(async () => {
         spinner.start('Stopping Jellyfish...')
         await launchctl('bootout', `${GUI_DOMAIN}/${LABEL}`)
-        spinner.succeed('Jellyfish stopped!')
+        spinner.succeed('Jellyfish Stopped!')
     })
 
 daemonCommand
