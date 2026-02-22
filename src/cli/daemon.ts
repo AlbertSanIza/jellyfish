@@ -89,14 +89,6 @@ daemonCommand
         spawnSync('tail', ['-f', logFile, errFile].filter(Boolean) as string[], { stdio: 'inherit' })
     })
 
-daemonCommand
-    .command('save')
-    .description('Save current process list for auto-restart on reboot')
-    .action(async () => {
-        await pm2Dump()
-        console.log('Jellyfish process list saved')
-    })
-
 daemonCommand.command('run', { hidden: true }).action(async () => {
     await import('../agent/index')
 })
