@@ -83,33 +83,43 @@ daemonCommand
     .command('stop')
     .description('Stop Jellyfish')
     .action(async () => {
-        spinner.start('Stopping Jellyfish')
-        const list = await pm2Describe()
-        if (!list.length || list[0]!.pm2_env?.status === 'stopped') {
-            spinner.info('Jellyfish is NOT Running')
-            return
+        try {
+            spinner.start('Stopping Jellyfish')
+            const list = await pm2Describe()
+            if (!list.length || list[0]!.pm2_env?.status === 'stopped') {
+                spinner.info('Jellyfish is NOT Running')
+                return
+            }
+            await pm2Action('stop')
+            spinner.succeed('Jellyfish Stopped')
+        } catch (err) {
+            spinner.fail(`Failed to stop: ${err instanceof Error ? err.message : err}`)
+            process.exit(1)
         }
-        await pm2Action('stop')
-        spinner.succeed('Jellyfish Stopped')
     })
 
 daemonCommand
     .command('status')
     .description('Jellyfish Status')
     .action(async () => {
-        const list = await pm2Describe()
-        if (!list.length) {
-            spinner.info(`Jellyfish is not registered, to get started run:\n${chalk.blue('jellyfish daemon start')}`)
-            return
+        try {
+            const list = await pm2Describe()
+            if (!list.length) {
+                spinner.info(`Jellyfish is not registered, to get started run:\n${chalk.blue('jellyfish daemon start')}`)
+                return
+            }
+            const proc = list[0]!
+            console.log(`Name:     ${proc.name}`)
+            console.log(`Status:   ${proc.pm2_env?.status}`)
+            console.log(`PID:      ${proc.pid}`)
+            console.log(`Uptime:   ${proc.pm2_env?.pm_uptime ? formatUptime(Date.now() - proc.pm2_env.pm_uptime) : 'N/A'}`)
+            console.log(`Restarts: ${proc.pm2_env?.restart_time}`)
+            console.log(`CPU:      ${proc.monit?.cpu}%`)
+            console.log(`Memory:   ${proc.monit?.memory ? (proc.monit.memory / 1024 / 1024).toFixed(1) + ' MB' : 'N/A'}`)
+        } catch (err) {
+            spinner.fail(`Failed to get status: ${err instanceof Error ? err.message : err}`)
+            process.exit(1)
         }
-        const proc = list[0]!
-        console.log(`Name:     ${proc.name}`)
-        console.log(`Status:   ${proc.pm2_env?.status}`)
-        console.log(`PID:      ${proc.pid}`)
-        console.log(`Uptime:   ${proc.pm2_env?.pm_uptime ? formatUptime(Date.now() - proc.pm2_env.pm_uptime) : 'N/A'}`)
-        console.log(`Restarts: ${proc.pm2_env?.restart_time}`)
-        console.log(`CPU:      ${proc.monit?.cpu}%`)
-        console.log(`Memory:   ${proc.monit?.memory ? (proc.monit.memory / 1024 / 1024).toFixed(1) + ' MB' : 'N/A'}`)
     })
 
 daemonCommand
@@ -127,14 +137,19 @@ daemonCommand
     .command('delete')
     .description('Remove Jellyfish from pm2 process list')
     .action(async () => {
-        const list = await pm2Describe()
-        if (!list.length) {
-            spinner.info('Jellyfish is not registered')
-            return
+        try {
+            const list = await pm2Describe()
+            if (!list.length) {
+                spinner.info('Jellyfish is not registered')
+                return
+            }
+            spinner.start('Removing Jellyfish...')
+            await pm2Action('delete')
+            spinner.succeed('Jellyfish removed from pm2')
+        } catch (err) {
+            spinner.fail(`Failed to delete: ${err instanceof Error ? err.message : err}`)
+            process.exit(1)
         }
-        spinner.start('Removing Jellyfish...')
-        await pm2Action('delete')
-        spinner.succeed('Jellyfish removed from pm2')
     })
 
 daemonCommand.command('run', { hidden: true }).action(async () => {
