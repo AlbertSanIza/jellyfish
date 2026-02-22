@@ -13,7 +13,12 @@ export const daemonCommand = new Command('daemon').description('Manage the Jelly
 daemonCommand.hook('preAction', async (_thisCommand, actionCommand) => {
     if (actionCommand.name() !== 'run') {
         spinner = ora({ isEnabled: isatty(1) })
-        await connect()
+        try {
+            await connect()
+        } catch (err) {
+            spinner.fail(`Failed to connect to pm2: ${err instanceof Error ? err.message : err}`)
+            process.exit(1)
+        }
     }
 })
 
