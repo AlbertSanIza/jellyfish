@@ -32,7 +32,12 @@ daemonCommand
     .description('Start Jellyfish')
     .action(async () => {
         spinner.start('Starting Jellyfish...')
-        await pm2Start({ name: 'jellyfish', script: process.argv[0], args: ['daemon', 'run'] })
+        const list = await pm2Describe()
+        if (list.length) {
+            await pm2Action('restart')
+        } else {
+            await pm2Start({ name: PROCESS_NAME, script: process.argv[0], args: ['daemon', 'run'] })
+        }
         spinner.succeed('Jellyfish Started!')
     })
 
@@ -41,6 +46,11 @@ daemonCommand
     .description('Stop Jellyfish')
     .action(async () => {
         spinner.start('Stopping Jellyfish...')
+        const list = await pm2Describe()
+        if (!list.length || list[0]!.pm2_env?.status === 'stopped') {
+            spinner.info('Jellyfish is NOT Running')
+            return
+        }
         await pm2Action('stop')
         spinner.succeed('Jellyfish Stopped!')
     })
@@ -50,6 +60,11 @@ daemonCommand
     .description('Restart Jellyfish')
     .action(async () => {
         spinner.start('Restarting Jellyfish...')
+        const list = await pm2Describe()
+        if (!list.length) {
+            spinner.info(`Jellyfish is not registered, to get started run:\n${chalk.blue('jellyfish daemon start')}`)
+            return
+        }
         await pm2Action('restart')
         spinner.succeed('Jellyfish Restarted!')
     })
