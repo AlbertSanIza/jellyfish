@@ -32,8 +32,11 @@ daemonCommand.hook('postAction', async (_thisCommand, actionCommand) => {
             disconnect()
             break
         default:
-            await pm2Action('dump')
-            disconnect()
+            try {
+                await pm2Action('dump')
+            } finally {
+                disconnect()
+            }
             break
     }
 })
