@@ -56,7 +56,7 @@ daemonCommand
 
 daemonCommand
     .command('status')
-    .description('Show Jellyfish status')
+    .description('Jellyfish Status')
     .action(async () => {
         const list = await pm2Describe()
         if (!list.length) {
@@ -75,7 +75,7 @@ daemonCommand
 
 daemonCommand
     .command('logs')
-    .description('Show Jellyfish logs')
+    .description('Jellyfish Logs')
     .action(async () => {
         const list = await pm2Describe()
         if (!list.length) {
