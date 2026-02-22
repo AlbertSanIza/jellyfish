@@ -78,7 +78,7 @@ const MODEL_ALIASES: Record<string, string> = {
     haiku: ''
 }
 
-const getModel = (): string | undefined => {
+export const getModel = (): string | undefined => {
     const modelEnv = Bun.env.CLAUDE_MODEL
     if (!modelEnv) return undefined
     const resolved = MODEL_ALIASES[modelEnv.toLowerCase()] ?? modelEnv
