@@ -13,7 +13,6 @@ export async function run(ctx: Context) {
             permissionMode: 'acceptEdits'
         }
     })
-
     let response = ''
     for await (const message of messages) {
         if (message.type === 'assistant' && message.message?.content) {
