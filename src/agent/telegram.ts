@@ -14,7 +14,6 @@ export function createBot(): Bot {
 
     bot.command('new', (ctx) => ctx.reply('New Session! 🪼'))
 
-
     bot.on('message', async (ctx) => {
         const stopProcessing = startProcessing(ctx)
         try {
