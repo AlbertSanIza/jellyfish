@@ -3,6 +3,7 @@
         "aaron-bond.better-comments",
         "anthropic.claude-code",
         "chakrounanas.turbo-console-log",
+        "dbaeumer.vscode-eslint",
         "eamodio.gitlens",
         "esbenp.prettier-vscode",
         "github.vscode-github-actions",
