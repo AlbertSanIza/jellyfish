@@ -23,8 +23,8 @@ import telegramifyMarkdown from 'telegramify-markdown'
                     process.stdout.write(`Tool: ${block.name}\n`)
                 }
             }
-        } else if (message.type === 'result' && 'result' in message) {
-            response = message.subtype
+        } else if (message.type === 'result') {
+            response = message.result
         }
     }
     spinner.stop()
