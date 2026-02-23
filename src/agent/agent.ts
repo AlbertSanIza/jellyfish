@@ -25,9 +25,8 @@ export async function run(ctx: Context) {
                     ctx.reply(`Tool: ${block.name}`)
                 }
             }
-        } else if (message.type === 'result') {
-            console.log(`Done: ${message.subtype}`) // Final result
-            response = message.result || ''
+        } else if (message.type === 'result' && 'result' in message) {
+            response = message.subtype
         }
     }
     return telegramifyMarkdown(response, 'escape')
