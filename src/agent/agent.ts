@@ -1,11 +1,12 @@
 import { query, type Query } from '@anthropic-ai/claude-agent-sdk'
 import type { Context } from 'grammy'
+import chalk from 'chalk'
 import { isatty } from 'node:tty'
 import ora from 'ora'
 import telegramifyMarkdown from 'telegramify-markdown'
 
     const spinner = ora({ isEnabled: isatty(1) }).start('Thinking')
-    process.stdout.write(`Prompt: ${prompt}\n`)
+    process.stdout.write(chalk.white(`Prompt: ${prompt}\n`))
     const messages = query({
         prompt,
         options: {
