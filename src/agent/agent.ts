@@ -6,7 +6,13 @@ export async function run(ctx: Context) {
     if (!ctx.message?.text) {
         return 'No message text found.'
     }
-    const messages: Query = query({ prompt: ctx.message.text, options: { model: 'sonnet' } })
+    const messages = query({
+        prompt,
+        options: {
+            model: 'sonnet',
+            permissionMode: 'acceptEdits'
+        }
+    })
 
     let response = ''
     for await (const message of messages) {
