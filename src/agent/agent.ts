@@ -5,14 +5,14 @@ import { isatty } from 'node:tty'
 import ora from 'ora'
 import telegramifyMarkdown from 'telegramify-markdown'
 
+export async function run(prompt: string): Promise<string> {
     const spinner = ora({ isEnabled: isatty(1) }).start('Thinking')
     process.stdout.write(`${chalk.bold.white('User:')}\n${chalk.green(prompt)}\n`)
     const messages = query({
         prompt,
         options: {
             model: 'sonnet',
-            permissionMode: 'acceptEdits',
-            canUseTool
+            permissionMode: 'acceptEdits'
         }
     })
     let response = ''
