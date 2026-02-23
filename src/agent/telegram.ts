@@ -2,12 +2,12 @@ import { Bot, Context } from 'grammy'
 
 import { BOT_TOKEN } from './utils'
 
-export const createBot = (): Bot => {
+export function createBot(): Bot {
     const bot = new Bot(BOT_TOKEN)
     void bot.api.setMyCommands([{ command: 'new', description: 'Clear session and start fresh' }])
 
-    bot.command('new', async (ctx) => {
-        await ctx.reply('Session cleared! 🪼')
+    bot.command('new', (ctx) => {
+        ctx.reply('Session cleared! 🪼')
     })
 
     bot.on('message', (ctx) => {
@@ -24,9 +24,9 @@ export const createBot = (): Bot => {
     return bot
 }
 
-const startTypingLoop = (ctx: Context): NodeJS.Timeout => {
-    void ctx.replyWithChatAction('typing')
+function startTypingLoop(ctx: Context): NodeJS.Timeout {
+    ctx.replyWithChatAction('typing')
     return setInterval(() => {
-        void ctx.replyWithChatAction('typing')
+        ctx.replyWithChatAction('typing')
     }, 4000)
 }
