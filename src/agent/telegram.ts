@@ -1,9 +1,12 @@
-import { Bot, Context } from 'grammy'
+import { Bot, Context, type NextFunction } from 'grammy'
 
-import { BOT_TOKEN } from './utils'
+import { ALLOWED_CHAT_IDS, BOT_TOKEN } from './utils'
 
 export function createBot(): Bot {
     const bot = new Bot(BOT_TOKEN)
+
+    bot.use(accessMiddleware)
+
     void bot.api.setMyCommands([{ command: 'new', description: 'Clear session and start fresh' }])
 
     bot.command('new', (ctx) => {
@@ -24,7 +27,20 @@ export function createBot(): Bot {
     return bot
 }
 
-function startTypingLoop(ctx: Context): NodeJS.Timeout {
+async function accessMiddleware(ctx: Context, next: NextFunction) {
+    const before = Date.now()
+    if (!ctx.chat?.id) {
+        return
+    }
+    if (!ALLOWED_CHAT_IDS.includes(ctx.chat.id)) {
+        return
+    }
+    await next()
+    const after = Date.now()
+    console.log(`Response Time: ${after - before} ms`)
+}
+
+function startTypingLoop(ctx: Context) {
     ctx.replyWithChatAction('typing')
     return setInterval(() => {
         ctx.replyWithChatAction('typing')
