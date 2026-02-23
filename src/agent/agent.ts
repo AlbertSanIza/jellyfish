@@ -1,5 +1,7 @@
 import { query, type Query } from '@anthropic-ai/claude-agent-sdk'
 import type { Context } from 'grammy'
+import { isatty } from 'node:tty'
+import ora from 'ora'
 import telegramifyMarkdown from 'telegramify-markdown'
 
     const spinner = ora({ isEnabled: isatty(1) }).start('Thinking')
