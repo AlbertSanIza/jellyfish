@@ -7,7 +7,7 @@ import telegramifyMarkdown from 'telegramify-markdown'
 export async function run(prompt: string, canUseTool?: CanUseTool): Promise<string> {
     const spinner = ora({ isEnabled: isatty(1) }).start('Thinking')
     process.stdout.write(`${chalk.bold.white('User:')}\n${chalk.green(prompt)}\n`)
-    const messages = query({
+    const response = query({
         prompt,
         options: {
             canUseTool,
@@ -15,8 +15,8 @@ export async function run(prompt: string, canUseTool?: CanUseTool): Promise<stri
             permissionMode: 'acceptEdits'
         }
     })
-    let response = ''
-    for await (const message of messages) {
+    let text = ''
+    for await (const message of response) {
         if (message.type === 'assistant' && message.message?.content) {
             for (const block of message.message.content) {
                 if ('text' in block) {
@@ -26,10 +26,10 @@ export async function run(prompt: string, canUseTool?: CanUseTool): Promise<stri
                 }
             }
         } else if (message.type === 'result') {
-            response = message.result
-            process.stdout.write(`${chalk.bold.white('Agent:')}\n${chalk.blue(response)}\n`)
+            text = message.result
+            process.stdout.write(`${chalk.bold.white('Agent:')}\n${chalk.blue(text)}\n`)
         }
     }
     spinner.stop()
-    return telegramifyMarkdown(response, 'escape')
+    return telegramifyMarkdown(text, 'escape')
 }
