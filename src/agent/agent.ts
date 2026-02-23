@@ -1,15 +1,16 @@
-import { query } from '@anthropic-ai/claude-agent-sdk'
+import { query, type CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import chalk from 'chalk'
 import { isatty } from 'node:tty'
 import ora from 'ora'
 import telegramifyMarkdown from 'telegramify-markdown'
 
-export async function run(prompt: string): Promise<string> {
+export async function run(prompt: string, canUseTool?: CanUseTool): Promise<string> {
     const spinner = ora({ isEnabled: isatty(1) }).start('Thinking')
     process.stdout.write(`${chalk.bold.white('User:')}\n${chalk.green(prompt)}\n`)
     const messages = query({
         prompt,
         options: {
+            canUseTool,
             model: 'sonnet',
             permissionMode: 'acceptEdits'
         }
