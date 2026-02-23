@@ -18,7 +18,7 @@ export function createBot(): Bot {
         const stopProcessing = startProcessing(ctx)
         try {
             const response = await run(ctx.message.text || '')
-            ctx.reply(response, { parse_mode: 'MarkdownV2' })
+            await sendFormattedReply(ctx, response)
         } finally {
             stopProcessing()
         }
@@ -47,5 +47,18 @@ function startProcessing(ctx: Filter<Context, 'message'>) {
     const typingLoop = setInterval(() => ctx.replyWithChatAction('typing'), 4000)
     return () => {
         clearInterval(typingLoop)
+    }
+}
+
+const sendFormattedReply = async (ctx: Context, text: string): Promise<void> => {
+    try {
+        await ctx.reply(text, { parse_mode: 'MarkdownV2' })
+    } catch {
+        const plain = text.replace(/\\([_*[\]()~`>#+=|{}.!-])/g, '$1')
+        try {
+            await ctx.reply(plain.replace(/([_*[\]()~`>#+=|{}.!-])/g, '\\$1'), { parse_mode: 'MarkdownV2' })
+        } catch {
+            await ctx.reply(plain)
+        }
     }
 }
