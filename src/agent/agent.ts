@@ -1,5 +1,4 @@
-import { query, type Query } from '@anthropic-ai/claude-agent-sdk'
-import type { Context } from 'grammy'
+import { query } from '@anthropic-ai/claude-agent-sdk'
 import chalk from 'chalk'
 import { isatty } from 'node:tty'
 import ora from 'ora'
