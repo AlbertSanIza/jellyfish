@@ -21,7 +21,7 @@ export async function run(prompt: string): Promise<string> {
                 if ('text' in block) {
                     process.stdout.write(`Partial${block.text}\n`)
                 } else if ('name' in block) {
-                    process.stdout.write(`${chalk.bold.white('Tool:')}\n${chalk.green(block.name)}\n`)
+                    process.stdout.write(`${chalk.bold.white('Tool:')} ${chalk.green(block.name)}\n`)
                 }
             }
         } else if (message.type === 'result') {
