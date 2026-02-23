@@ -19,9 +19,8 @@ export async function run(prompt: string): Promise<string> {
         if (message.type === 'assistant' && message.message?.content) {
             for (const block of message.message.content) {
                 if ('text' in block) {
-                    process.stdout.write(`${block.text}\n`)
+                    process.stdout.write(`Partial${block.text}\n`)
                 } else if ('name' in block) {
-                    process.stdout.write(`Tool: ${block.name}\n`)
                     process.stdout.write(`${chalk.bold.white('Tool:')}\n${chalk.green(block.name)}\n`)
                 }
             }
