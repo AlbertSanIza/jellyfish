@@ -6,7 +6,7 @@ import ora from 'ora'
 import telegramifyMarkdown from 'telegramify-markdown'
 
     const spinner = ora({ isEnabled: isatty(1) }).start('Thinking')
-    process.stdout.write(chalk.white(`Prompt: ${prompt}\n`))
+    process.stdout.write(`${chalk.bold.white('User:')}\n${chalk.green(prompt)}\n`)
     const messages = query({
         prompt,
         options: {
@@ -23,10 +23,12 @@ import telegramifyMarkdown from 'telegramify-markdown'
                     process.stdout.write(`${block.text}\n`)
                 } else if ('name' in block) {
                     process.stdout.write(`Tool: ${block.name}\n`)
+                    process.stdout.write(`${chalk.bold.white('Tool:')}\n${chalk.green(block.name)}\n`)
                 }
             }
         } else if (message.type === 'result') {
             response = message.result
+            process.stdout.write(`${chalk.bold.white('Agent:')}\n${chalk.blue(response)}\n`)
         }
     }
     spinner.stop()
