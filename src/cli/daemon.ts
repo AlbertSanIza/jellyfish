@@ -203,8 +203,14 @@ function formatUptime(ms: number): string {
     const hours = Math.floor((seconds % 86400) / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
     const parts: string[] = []
-    if (days) parts.push(`${days}d`)
-    if (hours) parts.push(`${hours}h`)
-    if (minutes) parts.push(`${minutes}m`)
+    if (days) {
+        parts.push(`${days}d`)
+    }
+    if (hours) {
+        parts.push(`${hours}h`)
+    }
+    if (minutes) {
+        parts.push(`${minutes}m`)
+    }
     return parts.length ? parts.join(' ') : '<1m'
 }
