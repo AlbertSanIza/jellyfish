@@ -10,7 +10,8 @@ import telegramifyMarkdown from 'telegramify-markdown'
         prompt,
         options: {
             model: 'sonnet',
-            permissionMode: 'acceptEdits'
+            permissionMode: 'acceptEdits',
+            canUseTool
         }
     })
     let response = ''
