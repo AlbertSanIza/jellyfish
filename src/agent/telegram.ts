@@ -9,9 +9,9 @@ export function createBot(): Bot {
 
     void bot.api.setMyCommands([{ command: 'new', description: 'Clear session and start fresh' }])
 
-    bot.command('new', (ctx) => {
-        ctx.reply('Session cleared! 🪼')
-    })
+    bot.command('start', (ctx) => ctx.reply('Welcome! 🪼'))
+
+    bot.command('new', (ctx) => ctx.reply('Session cleared! 🪼'))
 
     bot.on('message', (ctx) => {
         const typingLoop = startTypingLoop(ctx)
