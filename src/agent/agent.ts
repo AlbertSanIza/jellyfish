@@ -5,6 +5,7 @@ import ora from 'ora'
 import telegramifyMarkdown from 'telegramify-markdown'
 
     const spinner = ora({ isEnabled: isatty(1) }).start('Thinking')
+    process.stdout.write(`Prompt: ${prompt}\n`)
     const messages = query({
         prompt,
         options: {
