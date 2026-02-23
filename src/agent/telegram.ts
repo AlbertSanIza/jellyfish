@@ -17,8 +17,7 @@ export function createBot(): Bot {
     bot.on('message', async (ctx) => {
         const stopProcessing = startProcessing(ctx)
         try {
-            const response = await run(ctx.message.text || '')
-            await sendFormattedReply(ctx, response)
+            await sendFormattedReply(ctx, await run(ctx.message.text || ''))
         } finally {
             stopProcessing()
         }
@@ -31,10 +30,7 @@ export function createBot(): Bot {
 
 async function accessMiddleware(ctx: Context, next: NextFunction): Promise<void> {
     const before = Date.now()
-    if (!ctx.chat?.id) {
-        return
-    }
-    if (!ALLOWED_CHAT_IDS.includes(ctx.chat.id)) {
+    if (!ctx.chat?.id || !ALLOWED_CHAT_IDS.includes(ctx.chat.id) {
         return
     }
     await next()
