@@ -41,7 +41,7 @@ async function accessMiddleware(ctx: Context, next: NextFunction): Promise<void>
 
 function startProcessing(ctx: Filter<Context, 'message'>) {
     ctx.replyWithChatAction('typing')
-    const typingLoop = setInterval(() => ctx.replyWithChatAction('typing'), 4000)
+    const typingLoop = setInterval(() => ctx.replyWithChatAction('typing'), 4000).unref()
     return () => {
         clearInterval(typingLoop)
     }
