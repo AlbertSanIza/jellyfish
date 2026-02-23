@@ -14,11 +14,11 @@ export function createBot(): Bot {
     bot.command('new', (ctx) => ctx.reply('Session cleared! 🪼'))
 
     bot.on('message', (ctx) => {
-        const typingLoop = startTypingLoop(ctx)
+        const stopProcessing = startProcessing(ctx)
         try {
-            ctx.reply('Received your message! 📨')
+            ctx.reply(`Received your message: "${ctx.message.text}"`)
         } finally {
-            clearInterval(typingLoop)
+            stopProcessing()
         }
     })
 
@@ -27,7 +27,7 @@ export function createBot(): Bot {
     return bot
 }
 
-async function accessMiddleware(ctx: Context, next: NextFunction) {
+async function accessMiddleware(ctx: Context, next: NextFunction): Promise<void> {
     const before = Date.now()
     if (!ctx.chat?.id) {
         return
@@ -40,9 +40,10 @@ async function accessMiddleware(ctx: Context, next: NextFunction) {
     console.log(`Response Time: ${after - before} ms`)
 }
 
-function startTypingLoop(ctx: Context) {
+function startProcessing(ctx: Context) {
     ctx.replyWithChatAction('typing')
-    return setInterval(() => {
-        ctx.replyWithChatAction('typing')
-    }, 4000)
+    const typingLoop = setInterval(() => ctx.replyWithChatAction('typing'), 4000)
+    return () => {
+        clearInterval(typingLoop)
+    }
 }
