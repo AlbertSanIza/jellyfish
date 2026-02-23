@@ -2,10 +2,7 @@ import { query, type Query } from '@anthropic-ai/claude-agent-sdk'
 import type { Context } from 'grammy'
 import telegramifyMarkdown from 'telegramify-markdown'
 
-export async function run(ctx: Context) {
-    if (!ctx.message?.text) {
-        return 'No message text found.'
-    }
+    const spinner = ora({ isEnabled: isatty(1) }).start('Thinking')
     const messages = query({
         prompt,
         options: {
@@ -27,5 +24,6 @@ export async function run(ctx: Context) {
             response = message.subtype
         }
     }
+    spinner.stop()
     return telegramifyMarkdown(response, 'escape')
 }
