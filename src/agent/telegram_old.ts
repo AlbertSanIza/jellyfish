@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import { runAgent } from './agent'
+import { runAgent } from './agent_old'
 import { addCron, loadCrons, removeCron } from './cron'
 import { killJob, listJobs, loadJobs, spawnJob, type AgentName } from './jobs'
 import { createCanUseTool, handlePermissionCallback } from './permissions'
