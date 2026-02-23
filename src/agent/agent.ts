@@ -19,10 +19,9 @@ export async function run(ctx: Context) {
         if (message.type === 'assistant' && message.message?.content) {
             for (const block of message.message.content) {
                 if ('text' in block) {
-                    console.log(block.text)
+                    process.stdout.write(`${block.text}\n`)
                 } else if ('name' in block) {
-                    console.log(`Tool: ${block.name}`)
-                    ctx.reply(`Tool: ${block.name}`)
+                    process.stdout.write(`Tool: ${block.name}\n`)
                 }
             }
         } else if (message.type === 'result' && 'result' in message) {
