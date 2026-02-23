@@ -17,8 +17,8 @@ export function createBot(): Bot {
     bot.on('message', async (ctx) => {
         const stopProcessing = startProcessing(ctx)
         try {
-            await run(ctx.message.text || '')
-            ctx.reply(`Received your message: "${ctx.message.text}"`)
+            const response = await run(ctx.message.text || '')
+            ctx.reply(response, { parse_mode: 'MarkdownV2' })
         } finally {
             stopProcessing()
         }
