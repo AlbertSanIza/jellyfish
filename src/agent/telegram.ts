@@ -17,7 +17,7 @@ export function createBot(): Bot {
     bot.on('message', async (ctx) => {
         const stopProcessing = startProcessing(ctx)
         try {
-            const response = await run(ctx)
+            const response = await run(ctx.message.text || '')
             await sendFormattedReply(ctx, response)
         } finally {
             stopProcessing()
