@@ -182,7 +182,15 @@ function pm2Describe(): Promise<pm2.ProcessDescription[]> {
 function pm2Action(action: 'restart' | 'stop' | 'delete' | 'dump'): Promise<void> {
     return new Promise((resolve, reject) => {
         if (action === 'dump') {
-            pm2.dump((err) => (err ? reject(err) : resolve()))
+            pm2.list((err, list) => {
+                if (err) {
+                    return reject(err)
+                }
+                if (!list.length) {
+                    return resolve()
+                }
+                pm2.dump((err) => (err ? reject(err) : resolve()))
+            })
         } else {
             pm2[action](PROCESS_NAME, (err) => (err ? reject(err) : resolve()))
         }
