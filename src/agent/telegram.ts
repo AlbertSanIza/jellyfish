@@ -1,5 +1,6 @@
-import { Bot, Context, type NextFunction } from 'grammy'
+import { Bot, Context, type Filter, type NextFunction } from 'grammy'
 
+import { run } from './agent'
 import { ALLOWED_CHAT_IDS, BOT_TOKEN } from './utils'
 
 export function createBot(): Bot {
@@ -13,9 +14,10 @@ export function createBot(): Bot {
 
     bot.command('new', (ctx) => ctx.reply('Session cleared! 🪼'))
 
-    bot.on('message', (ctx) => {
+    bot.on('message', async (ctx) => {
         const stopProcessing = startProcessing(ctx)
         try {
+            await run(ctx.message.text || '')
             ctx.reply(`Received your message: "${ctx.message.text}"`)
         } finally {
             stopProcessing()
@@ -40,7 +42,7 @@ async function accessMiddleware(ctx: Context, next: NextFunction): Promise<void>
     console.log(`Response Time: ${after - before} ms`)
 }
 
-function startProcessing(ctx: Context) {
+function startProcessing(ctx: Filter<Context, 'message'>) {
     ctx.replyWithChatAction('typing')
     const typingLoop = setInterval(() => ctx.replyWithChatAction('typing'), 4000)
     return () => {
