@@ -48,7 +48,7 @@ function startProcessing(ctx: Filter<Context, 'message'>) {
     }
 }
 
-const sendFormattedReply = async (ctx: Context, text: string): Promise<void> => {
+async function sendFormattedReply(ctx: Context, text: string): Promise<void> {
     try {
         await ctx.reply(text, { parse_mode: 'MarkdownV2' })
     } catch {
