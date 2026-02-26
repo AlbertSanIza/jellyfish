@@ -19,7 +19,7 @@ export function createBot(): Bot {
 
     void bot.api.setMyCommands([
         { command: 'new', description: 'Clear session and start fresh' },
-        { command: 'session', description: 'Manage sessions' }
+        { command: 'session', description: 'Session Manager' }
     ])
 
     bot.command('start', (ctx) => ctx.reply('Welcome! 🪼'))
