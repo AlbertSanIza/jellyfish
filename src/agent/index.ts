@@ -1,15 +1,23 @@
+import { run } from '@grammyjs/runner'
 import chalk from 'chalk'
 import figlet from 'figlet'
 
 import { createBot } from './telegram'
 
 const bot = createBot()
+await bot.api.deleteWebhook({ drop_pending_updates: true })
 
-bot.start()
+const runner = run(bot, {
+    runner: {
+        fetch: {
+            allowed_updates: ['message', 'callback_query']
+        }
+    }
+})
 
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     console.log(`Received ${signal}. Stopping Jellyfish...`)
-    bot.stop()
+    runner.stop()
 }
 
 process.once('SIGINT', () => void shutdown('SIGINT'))
