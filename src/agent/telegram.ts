@@ -19,11 +19,21 @@ export function createBot(): Bot {
 
     bot.use(accessMiddleware)
 
-    void bot.api.setMyCommands([{ command: 'new', description: 'Clear session and start fresh' }])
+    void bot.api.setMyCommands([
+        { command: 'new', description: 'Clear session and start fresh' },
+        { command: 'sessions', description: 'List active session count' }
+    ])
 
     bot.command('start', (ctx) => ctx.reply('Welcome! 🪼'))
 
     bot.command('new', (ctx) => ctx.reply('New Session! 🪼'))
+
+    bot.command('sessions', async (ctx) => {
+        const sessions = await listSessions()
+        console.log(sessions)
+        await ctx.reply(`Active sessions: ${sessions.length}`)
+    })
+
 
     bot.on('message', async (ctx) => {
         const stopProcessing = startProcessing(ctx)
