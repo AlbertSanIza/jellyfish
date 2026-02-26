@@ -8,6 +8,7 @@
         "esbenp.prettier-vscode",
         "github.vscode-github-actions",
         "github.vscode-pull-request-github",
+        "openai.chatgpt",
         "oven.bun-vscode",
         "pkief.material-icon-theme",
         "streetsidesoftware.code-spell-checker",
