@@ -3,6 +3,17 @@ import { Bot, Context, type Filter, type NextFunction } from 'grammy'
 import { run } from './agent'
 import { ALLOWED_CHAT_IDS, BOT_TOKEN } from './utils'
 
+async function accessMiddleware(ctx: Context, next: NextFunction): Promise<void> {
+    const before = Date.now()
+    const chatId = ctx.chat?.id ?? ctx.callbackQuery?.message?.chat?.id
+    if (!chatId || !ALLOWED_CHAT_IDS.includes(chatId)) {
+        return
+    }
+    await next()
+    const after = Date.now()
+    console.log(`Response Time: ${after - before} ms`)
+}
+
 export function createBot(): Bot {
     const bot = new Bot(BOT_TOKEN)
 
@@ -27,17 +38,6 @@ export function createBot(): Bot {
     bot.catch((error) => console.error('Telegram Bot Error:', error))
 
     return bot
-}
-
-async function accessMiddleware(ctx: Context, next: NextFunction): Promise<void> {
-    const before = Date.now()
-    const chatId = ctx.chat?.id ?? ctx.callbackQuery?.message?.chat?.id
-    if (!chatId || !ALLOWED_CHAT_IDS.includes(chatId)) {
-        return
-    }
-    await next()
-    const after = Date.now()
-    console.log(`Response Time: ${after - before} ms`)
 }
 
 function startProcessing(ctx: Filter<Context, 'message'>) {
