@@ -26,7 +26,11 @@ export function createBot(): Bot {
 
     bot.command('start', (ctx) => ctx.reply('Welcome! 🪼'))
 
-    bot.command('new', (ctx) => ctx.reply('New Session! 🪼'))
+    bot.command('new', async (ctx) => {
+        await clearSession(ctx.chat.id)
+        alwaysAllowedByChat.delete(ctx.chat.id)
+        await ctx.reply('New Session! 🪼')
+    })
 
     bot.command('sessions', async (ctx) => {
         const sessions = await listSessions({ dir: process.cwd() })
