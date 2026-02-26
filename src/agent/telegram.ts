@@ -31,7 +31,8 @@ export function createBot(): Bot {
 
 async function accessMiddleware(ctx: Context, next: NextFunction): Promise<void> {
     const before = Date.now()
-    if (!ctx.chat?.id || !ALLOWED_CHAT_IDS.includes(ctx.chat.id)) {
+    const chatId = ctx.chat?.id ?? ctx.callbackQuery?.message?.chat?.id
+    if (!chatId || !ALLOWED_CHAT_IDS.includes(chatId)) {
         return
     }
     await next()
