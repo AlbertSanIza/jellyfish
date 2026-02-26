@@ -3,21 +3,19 @@ import { Bot, Context, type Filter, type NextFunction } from 'grammy'
 import { run } from './agent'
 import { ALLOWED_CHAT_IDS, BOT_TOKEN } from './utils'
 
-async function accessMiddleware(ctx: Context, next: NextFunction): Promise<void> {
-    const before = Date.now()
-    const chatId = ctx.chat?.id ?? ctx.callbackQuery?.message?.chat?.id
-    if (!chatId || !ALLOWED_CHAT_IDS.includes(chatId)) {
-        return
-    }
-    await next()
-    const after = Date.now()
-    console.log(`Response Time: ${after - before} ms`)
-}
-
 export function createBot(): Bot {
     const bot = new Bot(BOT_TOKEN)
 
-    bot.use(accessMiddleware)
+    bot.use(async (ctx: Context, next: NextFunction): Promise<void> => {
+        const before = Date.now()
+        const chatId = ctx.chat?.id ?? ctx.callbackQuery?.message?.chat?.id
+        if (!chatId || !ALLOWED_CHAT_IDS.includes(chatId)) {
+            return
+        }
+        await next()
+        const after = Date.now()
+        console.log(`Response Time: ${after - before} ms`)
+    })
 
     void bot.api.setMyCommands([
         { command: 'new', description: 'Clear session and start fresh' },
