@@ -29,9 +29,9 @@ export function createBot(): Bot {
     bot.command('new', (ctx) => ctx.reply('New Session! 🪼'))
 
     bot.command('sessions', async (ctx) => {
-        const sessions = await listSessions()
-        console.log(sessions)
-        await ctx.reply(`Active sessions: ${sessions.length}`)
+        const sessions = await listSessions({ dir: process.cwd() })
+        console.log(sessions.map((session) => session.summary))
+        ctx.reply(`Active sessions: ${sessions.length}`)
     })
 
 
