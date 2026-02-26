@@ -30,10 +30,14 @@ export function createBot(): Bot {
         await ctx.reply('New Session! 🪼')
     })
 
-    bot.command('sessions', async (ctx) => {
-        const sessions = await listSessions({ dir: process.cwd() })
-        console.log(sessions.map((session) => session.summary))
-        ctx.reply(`Active sessions: ${sessions.length}`)
+    bot.command('session', async (ctx) => {
+        const keyboard = new InlineKeyboard()
+            .text('Details', 'sess:details')
+            .text('Resume', 'sess:resume')
+            .row()
+            .text('Remove', 'sess:remove')
+            .text('Cancel', 'sess:cancel')
+        await ctx.reply('Session Manager 🪼', { reply_markup: keyboard })
     })
 
 
