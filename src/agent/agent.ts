@@ -4,7 +4,7 @@ import { isatty } from 'node:tty'
 import ora from 'ora'
 import telegramifyMarkdown from 'telegramify-markdown'
 
-export async function run(prompt: string, canUseTool?: CanUseTool): Promise<string> {
+export async function run(prompt: string, canUseTool?: CanUseTool, sessionId?: string): Promise<{ text: string; sessionId?: string }> {
     const spinner = ora({ isEnabled: isatty(1) }).start('Thinking')
     process.stdout.write(`${chalk.bold.white('User:')}\n${chalk.green(prompt)}\n`)
     const response = query({
@@ -12,11 +12,17 @@ export async function run(prompt: string, canUseTool?: CanUseTool): Promise<stri
         options: {
             canUseTool,
             model: 'sonnet',
-            permissionMode: 'acceptEdits'
+            permissionMode: 'acceptEdits',
+            ...(sessionId ? { resume: sessionId } : {})
         }
     })
     let text = ''
+    let newSessionId: string | undefined
     for await (const message of response) {
+        if (message.type === 'system' && message.subtype === 'init') {
+            newSessionId = message.session_id
+            console.log(`Session started with ID: ${newSessionId}`)
+        }
         if (message.type === 'assistant' && message.message?.content) {
             for (const block of message.message.content) {
                 if ('text' in block) {
@@ -31,5 +37,5 @@ export async function run(prompt: string, canUseTool?: CanUseTool): Promise<stri
         }
     }
     spinner.stop()
-    return telegramifyMarkdown(text, 'escape')
+    return { text: telegramifyMarkdown(text, 'escape'), sessionId: newSessionId }
 }

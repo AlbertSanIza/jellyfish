@@ -1,6 +1,11 @@
+import { listSessions } from '@anthropic-ai/claude-agent-sdk'
 import { mkdir, unlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+
+async function getSessions() {
+    return await listSessions({ dir: process.cwd() })
+}
 
 export type SessionRole = 'system' | 'user' | 'assistant'
 
@@ -61,6 +66,40 @@ export const saveSession = async (chatId: number, data: SessionData): Promise<vo
     const sessionPath = getSessionPath(chatId)
     await Bun.write(sessionPath, JSON.stringify(data, null, 2))
 }
+
+export interface SessionInfo {
+    chatId: number
+    sdkSessionId?: string
+    messageCount: number
+    lastMessage?: SessionMessage
+    modifiedAt: Date
+}
+
+// export const listSessions = async (limit = 10): Promise<SessionInfo[]> => {
+//     await ensureSessionsDir()
+//     let files: string[]
+//     try {
+//         files = await readdir(sessionsDir)
+//     } catch {
+//         return []
+//     }
+//     const sessionFiles = files.filter((f) => f.endsWith('.json'))
+//     const sessions: SessionInfo[] = []
+//     for (const file of sessionFiles) {
+//         const chatId = parseInt(file.replace('.json', ''), 10)
+//         if (isNaN(chatId)) continue
+//         const filePath = path.join(sessionsDir, file)
+//         const [data, stats] = await Promise.all([loadSession(chatId), stat(filePath)])
+//         sessions.push({
+//             chatId,
+//             sdkSessionId: data.sdkSessionId,
+//             messageCount: data.messages.length,
+//             lastMessage: data.messages[data.messages.length - 1],
+//             modifiedAt: stats.mtime
+//         })
+//     }
+//     return sessions.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime()).slice(0, limit)
+// }
 
 export const clearSession = async (chatId: number): Promise<void> => {
     await ensureSessionsDir()
