@@ -5,7 +5,7 @@
     "": {
       "name": "jellyfish",
       "dependencies": {
-        "@anthropic-ai/claude-agent-sdk": "^0.2.50",
+        "@anthropic-ai/claude-agent-sdk": "^0.2.62",
         "@elevenlabs/elevenlabs-js": "^2.36.0",
         "@eslint/js": "^10.0.1",
         "@grammyjs/runner": "^2.0.3",
@@ -14,7 +14,7 @@
         "commander": "^14.0.3",
         "figlet": "^1.10.0",
         "globals": "^17.3.0",
-        "grammy": "^1.40.0",
+        "grammy": "^1.40.1",
         "husky": "^9.1.7",
         "jiti": "^2.6.1",
         "lint-staged": "^16.2.7",
@@ -24,13 +24,13 @@
         "prettier": "^3.8.1",
         "telegramify-markdown": "^1.3.2",
         "typescript": "^5.9.3",
-        "typescript-eslint": "^8.56.0",
+        "typescript-eslint": "^8.56.1",
         "zod": "^4.3.6",
       },
     },
   },
   "packages": {
-    "@anthropic-ai/claude-agent-sdk": ["@anthropic-ai/claude-agent-sdk@0.2.59", "", { "optionalDependencies": { "@img/sharp-darwin-arm64": "^0.34.2", "@img/sharp-darwin-x64": "^0.34.2", "@img/sharp-linux-arm": "^0.34.2", "@img/sharp-linux-arm64": "^0.34.2", "@img/sharp-linux-x64": "^0.34.2", "@img/sharp-linuxmusl-arm64": "^0.34.2", "@img/sharp-linuxmusl-x64": "^0.34.2", "@img/sharp-win32-arm64": "^0.34.2", "@img/sharp-win32-x64": "^0.34.2" }, "peerDependencies": { "zod": "^4.0.0" } }, "sha512-xPOUZZimZI5ChaO791olWGXqaRvCwOfj9/1micu42EL9czdcwiDm0WK1OGsqb2mZ7LSCoYWBB0ZHVKOxehemDA=="],
+    "@anthropic-ai/claude-agent-sdk": ["@anthropic-ai/claude-agent-sdk@0.2.62", "", { "optionalDependencies": { "@img/sharp-darwin-arm64": "^0.34.2", "@img/sharp-darwin-x64": "^0.34.2", "@img/sharp-linux-arm": "^0.34.2", "@img/sharp-linux-arm64": "^0.34.2", "@img/sharp-linux-x64": "^0.34.2", "@img/sharp-linuxmusl-arm64": "^0.34.2", "@img/sharp-linuxmusl-x64": "^0.34.2", "@img/sharp-win32-arm64": "^0.34.2", "@img/sharp-win32-x64": "^0.34.2" }, "peerDependencies": { "zod": "^4.0.0" } }, "sha512-exRJ2djKP6erRpUrtnVf5iXzqeS9dAie9d1ghODZVVXdLqieSqCpaAhZhe0hL1yvP33OL0J5CgT9RAyPzhYY9A=="],
 
     "@elevenlabs/elevenlabs-js": ["@elevenlabs/elevenlabs-js@2.36.0", "", { "dependencies": { "command-exists": "^1.2.9", "node-fetch": "^2.7.0", "ws": "^8.18.3" } }, "sha512-dnhJHmozQj2xBxgEbPa3clK1G3jY8xUmij8nzNHW9GBDYg2750OwgaSCnZmlFtm53MorEspmlcSu2+fzSeldkQ=="],
 
