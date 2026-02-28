@@ -1,42 +1,35 @@
 import os from 'node:os'
 import path from 'node:path'
+import { z } from 'zod'
 
 const JELLYFISH_DIR = path.join(os.homedir(), '.jellyfish')
 const SETTINGS_PATH = path.join(JELLYFISH_DIR, 'settings.json')
 
-interface Settings {
-    telegram: {
-        token: string
-        allowedChatIds: number[]
-    }
-    claude: {
-        model: string
-    }
-}
+const settingsSchema = z.object({
+    telegram: z.object({
+        token: z.string().min(10).default(''),
+        allowedChatIds: z.array(z.number()).default([])
+    }),
+    claude: z.object({
+        model: z.string().default('sonnet')
+    })
+})
 
-const TEMPLATE: Settings = {
-    telegram: {
-        token: '',
-        allowedChatIds: []
-    },
-    claude: {
-        model: 'sonnet'
-    }
-}
-
-export async function loadSettings(): Promise<Settings> {
-    const file = await Bun.file(SETTINGS_PATH)
+async function loadSettings(): Promise<z.infer<typeof settingsSchema>> {
+    const file = Bun.file(SETTINGS_PATH)
     if (!(await file.exists())) {
-        await Bun.write(SETTINGS_PATH, JSON.stringify(TEMPLATE, null, 4))
+        await Bun.write(SETTINGS_PATH, JSON.stringify(settingsSchema.parse({ telegram: {}, claude: {} }), null, 4))
+        console.error(`Created settings at ${SETTINGS_PATH} — fill it in and restart.`)
         process.exit(1)
     }
-    const settings: Settings = await file.json()
-    if (!settings.telegram.token) {
-        console.error(`Set a valid telegram.token in ${SETTINGS_PATH}`)
+    const result = settingsSchema.safeParse(await file.json())
+    if (!result.success) {
+        console.log('Invalid Settings File:')
+        console.error(`${result.error.issues.map((index) => `- ${index.path.join('.')}: ${index.message}`).join('\n')}`)
         process.exit(1)
     }
 
-    return settings
+    return result.data
 }
 
 export const settings = await loadSettings()
