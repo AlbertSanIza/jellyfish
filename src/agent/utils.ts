@@ -18,7 +18,7 @@ const settingsSchema = z.object({
 async function loadSettings(): Promise<z.infer<typeof settingsSchema>> {
     const file = Bun.file(SETTINGS_PATH)
     if (!(await file.exists())) {
-        await Bun.write(SETTINGS_PATH, JSON.stringify(settingsSchema.parse({ telegram: {}, claude: {} }), null, 4))
+        await Bun.write(SETTINGS_PATH, JSON.stringify(settingsSchema.parse({ telegram: {}, claude: {} }), null, 2))
         console.error(`Created settings at ${SETTINGS_PATH} — fill it in and restart.`)
         process.exit(1)
     }
