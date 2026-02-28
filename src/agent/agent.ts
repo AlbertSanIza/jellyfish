@@ -4,6 +4,8 @@ import { isatty } from 'node:tty'
 import ora from 'ora'
 import telegramifyMarkdown from 'telegramify-markdown'
 
+import { settings } from './settings'
+
 export async function run(prompt: string, canUseTool?: CanUseTool, sessionId?: string): Promise<{ text: string; sessionId?: string }> {
     const spinner = ora({ isEnabled: isatty(1) }).start('Thinking')
     process.stdout.write(`${chalk.bold.white('User:')}\n${chalk.green(prompt)}\n`)

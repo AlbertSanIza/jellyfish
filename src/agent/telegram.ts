@@ -5,9 +5,10 @@ import { Bot, Context, InlineKeyboard, type Filter, type NextFunction } from 'gr
 import { run } from './agent'
 import { clearSession, loadSession, saveSession } from './session'
 import { ALLOWED_CHAT_IDS, BOT_TOKEN } from './utils'
+import { settings } from './settings'
 
 export function createBot(): Bot {
-    const bot = new Bot(BOT_TOKEN)
+    const bot = new Bot(settings.telegram.token)
 
     bot.use(async (ctx: Context, next: NextFunction): Promise<void> => {
         const before = Date.now()
