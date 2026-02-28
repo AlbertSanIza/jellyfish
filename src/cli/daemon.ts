@@ -8,7 +8,7 @@ import pm2 from 'pm2'
 let spinner: Ora
 const PROCESS_NAME = 'jellyfish'
 
-export const daemonCommand = new Command('daemon').description('Manage the Jellyfish daemon')
+export const daemonCommand = new Command('daemon').description('Manage daemon')
 
 daemonCommand.hook('preAction', async (_thisCommand, actionCommand) => {
     if (actionCommand.name() !== 'run') {
