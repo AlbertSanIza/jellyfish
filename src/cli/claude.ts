@@ -11,35 +11,13 @@ export const claudeCommand = new Command('claude').description('Manage claude se
 
 const modelCommand = new Command('model').description('Manage Claude model')
 
-modelCommand
-    .command('set <value>')
-    .description('Set the Claude model (sonnet, opus)')
-    .action(async (value: string) => {
-        if (!CLAUDE_MODELS.includes(value as (typeof CLAUDE_MODELS)[number])) {
-            console.error(`Invalid model "${value}". Must be one of: ${CLAUDE_MODELS.join(', ')}`)
-            process.exit(1)
-        }
-        const settings = await readSettings()
-        settings.claude.model = value as (typeof CLAUDE_MODELS)[number]
-        await writeSettings(settings)
-        console.log(`Claude model set to ${value}.`)
-    })
-
 modelCommand.action(async () => {
     const settings = await readSettings()
-    const current = settings.claude.model
-
-    const model = await select({
-        message: 'Select Claude model',
-        choices: CLAUDE_MODELS.map((m) => ({
-            name: m === current ? `${m} (current)` : m,
-            value: m
-        }))
+    settings.claude.model = await select({
+        message: 'Select Model',
+        choices: CLAUDE_MODELS.map((model) => ({ value: model, name: model === settings.claude.model ? `${model} (current)` : model }))
     })
-
-    settings.claude.model = model
     await writeSettings(settings)
-    console.log(`Claude model set to ${model}.`)
 })
 
 claudeCommand.addCommand(modelCommand)
