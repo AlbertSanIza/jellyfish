@@ -1,22 +1,25 @@
 import { z } from 'zod'
 
-import { SETTINGS_PATH, settingsSchema, writeFormattedJson } from './utils'
+import { SETTINGS_PATH } from './utils'
 
-async function loadSettings(): Promise<z.infer<typeof settingsSchema>> {
+export const settingsSchema = z.object({
+    telegram: z.object({
+        token: z.string().default(''),
+        allowedChatIds: z.array(z.number()).default([])
+    }),
+    claude: z.object({
+        model: z.enum(['sonnet', 'opus']).default('sonnet')
+    })
+})
+
+export async function readSettings() {
     const file = Bun.file(SETTINGS_PATH)
     if (!(await file.exists())) {
-        await Bun.write(SETTINGS_PATH, JSON.stringify(settingsSchema.parse({ telegram: {}, claude: {} }), null, 2))
-        console.error(`Created settings at ${SETTINGS_PATH} — fill it in and restart.`)
-        process.exit(1)
+        return settingsSchema.parse({ telegram: {}, claude: {} })
     }
-    const result = settingsSchema.safeParse(await file.json())
-    if (!result.success) {
-        console.log('Invalid Settings File:')
-        console.error(`${result.error.issues.map((index) => `- ${index.path.join('.')}: ${index.message}`).join('\n')}`)
-        process.exit(1)
-    }
-
-    return result.data
+    return settingsSchema.parse(await file.json())
 }
 
-export const settings = await loadSettings()
+export async function writeSettings(settings: z.infer<typeof settingsSchema>) {
+    await Bun.write(SETTINGS_PATH, JSON.stringify(settings, null, 2))
+}
