@@ -1,6 +1,9 @@
 import { z } from 'zod'
 
-import { SETTINGS_PATH } from './utils'
+import path from 'node:path'
+import { JELLYFISH_DIR } from './utils'
+
+export const SETTINGS_PATH = path.join(JELLYFISH_DIR, 'settings.json')
 
 export const settingsSchema = z.object({
     telegram: z.object({
