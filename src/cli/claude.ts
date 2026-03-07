@@ -1,11 +1,7 @@
 import select from '@inquirer/select'
 import { Command } from 'commander'
-import type { z } from 'zod'
 
-import { settingsSchema } from '../settings'
-import { SETTINGS_PATH } from '../utils'
-
-const CLAUDE_MODELS = ['sonnet', 'opus'] as const
+import { CLAUDE_MODELS, readSettings, writeSettings } from '../settings'
 
 export const claudeCommand = new Command('claude').description('Manage claude settings')
 
@@ -21,12 +17,3 @@ modelCommand.action(async () => {
 })
 
 claudeCommand.addCommand(modelCommand)
-
-async function readSettings() {
-    const settingsFile = Bun.file(SETTINGS_PATH)
-    return settingsSchema.parse((await settingsFile.exists()) ? await settingsFile.json() : { telegram: {}, claude: {} })
-}
-
-async function writeSettings(data: z.infer<typeof settingsSchema>) {
-    await Bun.write(SETTINGS_PATH, JSON.stringify(settingsSchema.parse(data), null, 2))
-}

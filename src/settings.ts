@@ -3,6 +3,7 @@ import { z } from 'zod'
 import path from 'node:path'
 import { JELLYFISH_DIR } from './utils'
 
+export const CLAUDE_MODELS = ['sonnet', 'opus'] as const
 export const SETTINGS_PATH = path.join(JELLYFISH_DIR, 'settings.json')
 
 export const settingsSchema = z.object({
@@ -11,7 +12,7 @@ export const settingsSchema = z.object({
         allowedChatIds: z.array(z.number()).default([])
     }),
     claude: z.object({
-        model: z.enum(['sonnet', 'opus']).default('sonnet')
+        model: z.enum(CLAUDE_MODELS).default('sonnet')
     })
 })
 
