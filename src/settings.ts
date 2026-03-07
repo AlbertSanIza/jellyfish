@@ -1,16 +1,6 @@
 import { z } from 'zod'
 
-import { SETTINGS_PATH } from './utils'
-
-export const settingsSchema = z.object({
-    telegram: z.object({
-        token: z.string().default(''),
-        allowedChatIds: z.array(z.number()).default([])
-    }),
-    claude: z.object({
-        model: z.enum(['haiku', 'sonnet', 'opus']).default('sonnet')
-    })
-})
+import { SETTINGS_PATH, settingsSchema, writeFormattedJson } from './utils'
 
 async function loadSettings(): Promise<z.infer<typeof settingsSchema>> {
     const file = Bun.file(SETTINGS_PATH)
