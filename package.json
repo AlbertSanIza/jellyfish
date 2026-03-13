@@ -17,8 +17,8 @@
         "pm2": "pm2"
     },
     "dependencies": {
-        "@anthropic-ai/claude-agent-sdk": "^0.2.71",
-        "@elevenlabs/elevenlabs-js": "^2.38.1",
+        "@anthropic-ai/claude-agent-sdk": "^0.2.74",
+        "@elevenlabs/elevenlabs-js": "^2.39.0",
         "@eslint/js": "^10.0.1",
         "@grammyjs/runner": "^2.0.3",
         "@inquirer/select": "^5.1.0",
@@ -30,7 +30,7 @@
         "grammy": "^1.41.1",
         "husky": "^9.1.7",
         "jiti": "^2.6.1",
-        "lint-staged": "^16.3.2",
+        "lint-staged": "^16.3.3",
         "node-cron": "^4.2.1",
         "ora": "^9.3.0",
         "pm2": "^6.0.14",
